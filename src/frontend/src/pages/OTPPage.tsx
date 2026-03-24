@@ -5,7 +5,13 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp";
 import { useQueryClient } from "@tanstack/react-query";
-import { Info, RotateCcw, ShieldCheck } from "lucide-react";
+import {
+  ClipboardCopy,
+  Info,
+  Loader2,
+  RotateCcw,
+  ShieldCheck,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -33,7 +39,8 @@ export default function OTPPage() {
   const { navigate, currentPhone, demoOtp, setDemoOtp, setCurrentUser } =
     useApp();
   const queryClient = useQueryClient();
-  const [otp, setOtp] = useState("");
+  // Initialize OTP with demoOtp if available (auto-fill on load)
+  const [otp, setOtp] = useState(() => demoOtp || "");
   const [otpError, setOtpError] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(60);
@@ -70,7 +77,6 @@ export default function OTPPage() {
         setOtpError("Incorrect OTP. Please try again.");
         return;
       }
-      // Check if new user
       const isNew = await actor.isNewUser(currentPhone);
       if (isNew) {
         navigate("role-selection");
@@ -98,6 +104,7 @@ export default function OTPPage() {
     try {
       const newOtp = await actor.generateOtp(currentPhone);
       setDemoOtp(newOtp);
+      setOtp(newOtp);
       setResendCooldown(60);
       timerRef.current = setInterval(() => {
         setResendCooldown((v) => {
@@ -108,11 +115,19 @@ export default function OTPPage() {
           return v - 1;
         });
       }, 1000);
-      toast.success("OTP resent!");
+      toast.success("OTP resent and auto-filled!");
     } catch (e: any) {
       toast.error(e?.message || "Failed to resend.");
     } finally {
       setResendLoading(false);
+    }
+  };
+
+  const handleAutoFill = () => {
+    if (demoOtp) {
+      setOtp(demoOtp);
+      setOtpError("");
+      toast.success("OTP auto-filled!");
     }
   };
 
@@ -142,17 +157,33 @@ export default function OTPPage() {
           data-ocid="otp.panel"
         >
           {demoOtp && (
-            <div className="bg-blue-50 border border-blue-300 rounded-lg p-3 flex gap-2">
-              <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs font-bold text-blue-800">
-                  Demo OTP (for testing):
-                </p>
-                <p className="text-lg font-mono font-bold text-blue-900 tracking-widest">
-                  {demoOtp}
-                </p>
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-amber-50 border-2 border-amber-400 rounded-xl p-4 space-y-3"
+              data-ocid="otp.demo_otp.panel"
+            >
+              <div className="flex gap-2 items-start">
+                <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-bold text-amber-800 uppercase tracking-wide">
+                    Demo OTP — Your code:
+                  </p>
+                  <p className="text-3xl font-mono font-extrabold text-amber-900 tracking-[0.3em] mt-1">
+                    {demoOtp}
+                  </p>
+                </div>
               </div>
-            </div>
+              <Button
+                type="button"
+                onClick={handleAutoFill}
+                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm"
+                data-ocid="otp.autofill.button"
+              >
+                <ClipboardCopy className="w-4 h-4 mr-2" />
+                Auto-fill OTP
+              </Button>
+            </motion.div>
           )}
 
           <div className="flex flex-col items-center gap-3">
@@ -190,7 +221,14 @@ export default function OTPPage() {
             className="w-full bg-primary hover:bg-primary/90 text-white font-semibold"
             data-ocid="otp.verify.button"
           >
-            {loading ? "Verifying..." : "Verify OTP"}
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Verifying…
+              </>
+            ) : (
+              "Verify OTP"
+            )}
           </Button>
 
           <div className="flex items-center justify-center gap-2">

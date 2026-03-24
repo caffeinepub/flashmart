@@ -1,12 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Info, Phone, Zap } from "lucide-react";
+import { Copy, Info, Loader2, Phone, Zap } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { createActorWithConfig } from "../config";
 import { useApp } from "../context/AppContext";
-import { useActor } from "../hooks/useActor";
 
 function validatePhone(phone: string): string | null {
   const cleaned = phone.replace(/\s/g, "");
@@ -19,12 +19,33 @@ function validatePhone(phone: string): string | null {
 }
 
 export default function LoginPage() {
-  const { actor } = useActor();
   const { navigate, setCurrentPhone, setDemoOtp } = useApp();
   const [phone, setPhone] = useState("+91");
   const [phoneError, setPhoneError] = useState("");
+  const [sendError, setSendError] = useState("");
   const [loading, setLoading] = useState(false);
   const [sentOtp, setSentOtp] = useState("");
+  const actorRef = useRef<Awaited<
+    ReturnType<typeof createActorWithConfig>
+  > | null>(null);
+
+  // Pre-warm actor on mount
+  useEffect(() => {
+    createActorWithConfig()
+      .then((a) => {
+        actorRef.current = a;
+      })
+      .catch(() => {});
+  }, []);
+
+  // Auto-navigate to otp-verify 2 seconds after OTP is generated
+  useEffect(() => {
+    if (!sentOtp) return;
+    const timer = setTimeout(() => {
+      navigate("otp-verify");
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [sentOtp, navigate]);
 
   const handleSendOTP = async () => {
     const err = validatePhone(phone);
@@ -33,25 +54,36 @@ export default function LoginPage() {
       return;
     }
     setPhoneError("");
-    if (!actor) {
-      toast.error("Not connected to backend. Please try again.");
-      return;
-    }
+    setSendError("");
     setLoading(true);
     try {
+      // Use cached actor or create a fresh one
+      let actor = actorRef.current;
+      if (!actor) {
+        actor = await createActorWithConfig();
+        actorRef.current = actor;
+      }
       const otp = await actor.generateOtp(phone.trim());
       setSentOtp(otp);
       setDemoOtp(otp);
       setCurrentPhone(phone.trim());
-      toast.success("OTP sent! Check the demo box below.");
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to send OTP.");
+      toast.success("OTP sent! Auto-redirecting in 2 seconds…");
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === "object" && "message" in e
+          ? String((e as { message: unknown }).message)
+          : "Failed to send OTP. Please try again.";
+      setSendError(msg);
+      toast.error(msg);
+      // Reset actor so next attempt tries fresh
+      actorRef.current = null;
     } finally {
       setLoading(false);
     }
   };
 
-  const handleProceed = () => {
+  const handleCopyAndContinue = () => {
+    navigator.clipboard.writeText(sentOtp).catch(() => {});
     navigate("otp-verify");
   };
 
@@ -96,6 +128,7 @@ export default function LoginPage() {
                 onChange={(e) => {
                   setPhone(e.target.value);
                   setPhoneError("");
+                  setSendError("");
                 }}
                 className="pl-9 border-border bg-white text-foreground"
                 data-ocid="login.phone.input"
@@ -114,41 +147,60 @@ export default function LoginPage() {
 
           <Button
             onClick={handleSendOTP}
-            disabled={loading || !actor}
+            disabled={loading}
             className="w-full bg-primary hover:bg-primary/90 text-white font-semibold"
             data-ocid="login.send_otp.button"
           >
-            {loading ? "Sending OTP..." : "Send OTP"}
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Sending OTP…
+              </>
+            ) : (
+              "Send OTP"
+            )}
           </Button>
 
-          {sentOtp && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex gap-2"
-              data-ocid="login.demo_otp.panel"
+          {sendError && (
+            <p
+              className="text-xs text-red-600 font-semibold text-center"
+              data-ocid="login.send_error_state"
             >
-              <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs font-bold text-blue-800">
-                  Demo OTP (for testing):
-                </p>
-                <p className="text-lg font-mono font-bold text-blue-900 tracking-widest">
-                  {sentOtp}
-                </p>
-              </div>
-            </motion.div>
+              ⚠️ {sendError}
+            </p>
           )}
 
           {sentOtp && (
-            <Button
-              onClick={handleProceed}
-              variant="outline"
-              className="w-full border-2 border-border font-semibold text-foreground"
-              data-ocid="login.proceed.button"
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3 }}
+              className="bg-amber-50 border-2 border-amber-400 rounded-xl p-4 space-y-3"
+              data-ocid="login.demo_otp.panel"
             >
-              Enter OTP →
-            </Button>
+              <div className="flex gap-2 items-start">
+                <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-bold text-amber-800 uppercase tracking-wide">
+                    Demo OTP — Use this code:
+                  </p>
+                  <p className="text-3xl font-mono font-extrabold text-amber-900 tracking-[0.3em] mt-1">
+                    {sentOtp}
+                  </p>
+                  <p className="text-xs text-amber-700 mt-1 font-medium">
+                    Auto-redirecting in 2 seconds…
+                  </p>
+                </div>
+              </div>
+              <Button
+                onClick={handleCopyAndContinue}
+                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm"
+                data-ocid="login.copy_continue.button"
+              >
+                <Copy className="w-4 h-4 mr-2" />
+                Copy OTP &amp; Continue
+              </Button>
+            </motion.div>
           )}
         </div>
       </motion.div>

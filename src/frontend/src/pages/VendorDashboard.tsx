@@ -1,23 +1,458 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   CheckCircle2,
+  Edit2,
+  ImageIcon,
   Loader2,
+  LogOut,
   Package,
+  PackagePlus,
   RefreshCw,
-  Store,
+  Save,
+  Trash2,
+  X,
   XCircle,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { type Order, OrderStatus } from "../backend";
+import { type Order, OrderStatus, type Product } from "../backend";
+import ConfirmModal from "../components/ConfirmModal";
 import { useApp } from "../context/AppContext";
-import { useOrdersByStatus, useUpdateOrderStatus } from "../hooks/useQueries";
+import {
+  useAddProduct,
+  useAllProducts,
+  useDeleteProduct,
+  useOrdersByStatus,
+  useUpdateOrderStatus,
+  useUpdateProduct,
+  useVendorProducts,
+} from "../hooks/useQueries";
+
+interface EditState {
+  name: string;
+  description: string;
+  price: string;
+  image: string;
+}
+
+function ProductManageCard({
+  product,
+  idx,
+  onEdit,
+  onDelete,
+}: {
+  product: Product;
+  idx: number;
+  onEdit: (product: Product) => void;
+  onDelete: (product: Product) => void;
+}) {
+  const imgSrc =
+    product.image && product.image.trim() !== ""
+      ? product.image
+      : `https://picsum.photos/seed/${product.productId}/200/140`;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.04 * idx }}
+      className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"
+      data-ocid={`products.item.${idx + 1}`}
+    >
+      <div className="flex gap-3 p-3">
+        <img
+          src={imgSrc}
+          alt={product.name}
+          className="w-16 h-16 object-cover rounded-lg flex-shrink-0"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src =
+              `https://picsum.photos/seed/${product.productId}/200/140`;
+          }}
+        />
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-sm text-gray-900 truncate">
+            {product.name}
+          </p>
+          <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+            {product.description}
+          </p>
+          <p className="font-extrabold text-sm text-green-600 mt-1">
+            ₹{product.price}
+          </p>
+        </div>
+        <div className="flex flex-col gap-1.5 flex-shrink-0">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onEdit(product)}
+            className="h-7 w-7 p-0 border-gray-300 text-gray-600 hover:bg-gray-50"
+            data-ocid={`products.edit_button.${idx + 1}`}
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onDelete(product)}
+            className="h-7 w-7 p-0 border-red-200 text-red-500 hover:bg-red-50"
+            data-ocid={`products.delete_button.${idx + 1}`}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function EditProductCard({
+  product,
+  idx,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  product: Product;
+  idx: number;
+  onSave: (productId: bigint, data: EditState) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  const [form, setForm] = useState<EditState>({
+    name: product.name,
+    description: product.description,
+    price: product.price.toString(),
+    image: product.image,
+  });
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="bg-white rounded-xl border-2 border-green-400 shadow-md p-3 space-y-2"
+      data-ocid={`products.item.${idx + 1}`}
+    >
+      <p className="text-xs font-bold text-green-600 uppercase tracking-wide">
+        Editing Product
+      </p>
+      <div className="space-y-2">
+        <Input
+          value={form.name}
+          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+          placeholder="Product name"
+          className="text-sm border-gray-300"
+          data-ocid={`products.item.${idx + 1}.input`}
+        />
+        <Input
+          value={form.description}
+          onChange={(e) =>
+            setForm((f) => ({ ...f, description: e.target.value }))
+          }
+          placeholder="Description"
+          className="text-sm border-gray-300"
+        />
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 font-semibold">
+            ₹
+          </span>
+          <Input
+            type="number"
+            value={form.price}
+            onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+            placeholder="Price"
+            className="text-sm border-gray-300 pl-7"
+          />
+        </div>
+        <Input
+          value={form.image}
+          onChange={(e) => setForm((f) => ({ ...f, image: e.target.value }))}
+          placeholder="Image URL (optional)"
+          className="text-sm border-gray-300"
+        />
+      </div>
+      <div className="flex gap-2 pt-1">
+        <Button
+          size="sm"
+          onClick={() => onSave(product.productId, form)}
+          disabled={isSaving}
+          className="flex-1 bg-green-500 hover:bg-green-600 text-white text-xs gap-1"
+          data-ocid={`products.save_button.${idx + 1}`}
+        >
+          {isSaving ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Save className="w-3.5 h-3.5" />
+          )}
+          Save
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={onCancel}
+          className="flex-1 text-xs gap-1 border-gray-300"
+          data-ocid={`products.cancel_button.${idx + 1}`}
+        >
+          <X className="w-3.5 h-3.5" />
+          Cancel
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
+
+function ManageProductsSection({
+  vendorId,
+  onConfirm,
+}: {
+  vendorId: string;
+  onConfirm: (message: string, action: () => void) => void;
+}) {
+  // If vendorId is "anonymous" or falsy, show all products instead
+  const isAnonymous = !vendorId || vendorId === "anonymous";
+  const vendorQuery = useVendorProducts(isAnonymous ? undefined : vendorId);
+  const allQuery = useAllProducts();
+  const { data: products = [], isLoading } = isAnonymous
+    ? allQuery
+    : vendorQuery;
+
+  const addProduct = useAddProduct();
+  const updateProduct = useUpdateProduct();
+  const deleteProduct = useDeleteProduct();
+
+  const [form, setForm] = useState({
+    name: "",
+    description: "",
+    price: "",
+    image: "",
+  });
+  const [formError, setFormError] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const handleAdd = async () => {
+    if (!form.name.trim()) {
+      setFormError("Product name is required.");
+      return;
+    }
+    if (!form.price || Number(form.price) <= 0) {
+      setFormError("Enter a valid price.");
+      return;
+    }
+    setFormError("");
+    try {
+      await addProduct.mutateAsync({
+        name: form.name.trim(),
+        description: form.description.trim(),
+        price: Number(form.price),
+        image: form.image.trim(),
+      });
+      setForm({ name: "", description: "", price: "", image: "" });
+      toast.success("Product added!");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to add product.");
+    }
+  };
+
+  const handleSaveEdit = async (productId: bigint, data: EditState) => {
+    if (!data.name.trim()) {
+      toast.error("Product name required.");
+      return;
+    }
+    if (!data.price || Number(data.price) <= 0) {
+      toast.error("Enter a valid price.");
+      return;
+    }
+    try {
+      await updateProduct.mutateAsync({
+        productId,
+        name: data.name.trim(),
+        description: data.description.trim(),
+        price: Number(data.price),
+        image: data.image.trim(),
+      });
+      setEditingId(null);
+      toast.success("Product updated!");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to update product.");
+    }
+  };
+
+  const handleDelete = (product: Product) => {
+    onConfirm(`Delete "${product.name}"? This cannot be undone.`, async () => {
+      try {
+        await deleteProduct.mutateAsync(product.productId);
+        toast.success(`"${product.name}" deleted.`);
+      } catch (e: any) {
+        toast.error(e?.message || "Failed to delete product.");
+      }
+    });
+  };
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center gap-2 mb-4">
+        <PackagePlus className="w-5 h-5 text-green-600" />
+        <h2 className="text-lg font-bold text-gray-900">Manage Products</h2>
+      </div>
+
+      {/* Add Product Form */}
+      <Card
+        className="mb-4 border-green-200 shadow-sm"
+        data-ocid="products.panel"
+      >
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
+            <PackagePlus className="w-4 h-4 text-green-600" />
+            Add New Product
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <Label className="text-xs font-semibold text-gray-700">
+                Product Name *
+              </Label>
+              <Input
+                value={form.name}
+                onChange={(e) => {
+                  setForm((f) => ({ ...f, name: e.target.value }));
+                  setFormError("");
+                }}
+                placeholder="e.g. Fresh Tomatoes"
+                className="mt-1 text-sm border-gray-300"
+                data-ocid="products.input"
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-semibold text-gray-700">
+                Description
+              </Label>
+              <Input
+                value={form.description}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, description: e.target.value }))
+                }
+                placeholder="Short description"
+                className="mt-1 text-sm border-gray-300"
+                data-ocid="products.textarea"
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-semibold text-gray-700">
+                Price (₹) *
+              </Label>
+              <div className="relative mt-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 font-semibold">
+                  ₹
+                </span>
+                <Input
+                  type="number"
+                  value={form.price}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, price: e.target.value }))
+                  }
+                  placeholder="0"
+                  className="pl-7 text-sm border-gray-300"
+                  min="0"
+                  data-ocid="products.price.input"
+                />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs font-semibold text-gray-700 flex items-center gap-1">
+                <ImageIcon className="w-3 h-3" /> Image URL
+              </Label>
+              <Input
+                value={form.image}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, image: e.target.value }))
+                }
+                placeholder="https://..."
+                className="mt-1 text-sm border-gray-300"
+                data-ocid="products.upload_button"
+              />
+            </div>
+          </div>
+          {formError && (
+            <p
+              className="text-xs text-red-600 font-semibold"
+              data-ocid="products.error_state"
+            >
+              {formError}
+            </p>
+          )}
+          <Button
+            onClick={handleAdd}
+            disabled={addProduct.isPending}
+            className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold gap-2"
+            data-ocid="products.primary_button"
+          >
+            {addProduct.isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Adding...
+              </>
+            ) : (
+              <>
+                <PackagePlus className="w-4 h-4" /> Add Product
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Product List */}
+      <h3 className="text-sm font-bold text-gray-700 mb-2">
+        Your Products ({products.length})
+      </h3>
+      {isLoading ? (
+        <div
+          className="flex items-center gap-2 text-gray-500 text-sm py-4"
+          data-ocid="products.loading_state"
+        >
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading products...
+        </div>
+      ) : products.length === 0 ? (
+        <div
+          className="text-center py-8 text-gray-500 text-sm bg-gray-50 rounded-xl"
+          data-ocid="products.empty_state"
+        >
+          No products yet. Add your first product above!
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {products.map((product, i) => {
+            const id = product.productId.toString();
+            return editingId === id ? (
+              <EditProductCard
+                key={id}
+                product={product}
+                idx={i}
+                onSave={handleSaveEdit}
+                onCancel={() => setEditingId(null)}
+                isSaving={updateProduct.isPending}
+              />
+            ) : (
+              <ProductManageCard
+                key={id}
+                product={product}
+                idx={i}
+                onEdit={(p) => setEditingId(p.productId.toString())}
+                onDelete={handleDelete}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function VendorDashboard() {
-  const { currentUser } = useApp();
+  const { currentUser, navigate } = useApp();
   const {
     data: requestedOrders = [],
     isLoading,
@@ -28,17 +463,28 @@ export default function VendorDashboard() {
   );
   const updateStatus = useUpdateOrderStatus();
   const [declining, setDeclining] = useState<Set<string>>(new Set());
+  const [confirmModal, setConfirmModal] = useState<{
+    open: boolean;
+    message: string;
+    action: (() => void) | null;
+  }>({ open: false, message: "", action: null });
 
-  const handleAccept = async (order: Order) => {
-    try {
-      await updateStatus.mutateAsync({
-        orderId: order.id,
-        status: OrderStatus.storeConfirmed,
-      });
-      toast.success(`Order for "${order.itemName}" accepted!`);
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to accept order.");
-    }
+  const handleAccept = (order: Order) => {
+    setConfirmModal({
+      open: true,
+      message: `Accept order for "${order.itemName}"?`,
+      action: async () => {
+        try {
+          await updateStatus.mutateAsync({
+            orderId: order.id,
+            status: OrderStatus.storeConfirmed,
+          });
+          toast.success(`Order for "${order.itemName}" accepted!`);
+        } catch (e: any) {
+          toast.error(e?.message || "Failed to accept order.");
+        }
+      },
+    });
   };
 
   const handleDecline = (order: Order) => {
@@ -46,32 +492,78 @@ export default function VendorDashboard() {
     toast.info(`Order for "${order.itemName}" declined.`);
   };
 
+  const handleOpenConfirm = (message: string, action: () => void) => {
+    setConfirmModal({ open: true, message, action });
+  };
+
+  const handleConfirm = () => {
+    confirmModal.action?.();
+    setConfirmModal({ open: false, message: "", action: null });
+  };
+
+  const handleCancel = () => {
+    setConfirmModal({ open: false, message: "", action: null });
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("vendorAccess");
+    navigate("landing");
+  };
+
   const visibleRequested = requestedOrders.filter(
     (o) => !declining.has(o.id.toString()),
   );
 
+  // Always show Manage Products — dashboard is already password-protected
+  const vendorId = currentUser?.id?.toString() || "anonymous";
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
+      <ConfirmModal
+        open={confirmModal.open}
+        message={confirmModal.message}
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+      />
+
       <div className="mb-6 flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">
             Vendor Dashboard
           </h1>
           <p className="text-sm text-muted-foreground">
-            {currentUser?.name || "Store Vendor"} · Manage incoming orders
+            {currentUser?.name || "Store Vendor"} · Manage your store
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => refetch()}
-          className="gap-1.5"
-          data-ocid="vendor.refresh.button"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            className="gap-1.5"
+            data-ocid="vendor.refresh.button"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Refresh
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLogout}
+            className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+            data-ocid="vendor.logout.button"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Logout
+          </Button>
+        </div>
       </div>
+
+      {/* ── Manage Products (always visible — dashboard is password-protected) ── */}
+      <ManageProductsSection
+        vendorId={vendorId}
+        onConfirm={handleOpenConfirm}
+      />
 
       {/* Incoming Orders */}
       <div className="mb-8">
@@ -116,10 +608,7 @@ export default function VendorDashboard() {
                           {order.itemName}
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Order #{order.id.toString()} ·{" "}
-                          {new Date(
-                            Number(order.createdAt) / 1_000_000,
-                          ).toLocaleString()}
+                          Order #{order.id.toString()}
                         </p>
                         <Badge
                           variant="outline"

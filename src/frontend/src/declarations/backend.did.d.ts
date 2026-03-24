@@ -23,6 +23,15 @@ export type OrderStatus = { 'riderAssigned' : null } |
   { 'pickedUp' : null } |
   { 'delivered' : null };
 export type PhoneNumber = string;
+export interface Product {
+  'name' : string,
+  'createdAt' : bigint,
+  'description' : string,
+  'productId' : bigint,
+  'vendorId' : Principal,
+  'image' : string,
+  'price' : number,
+}
 export interface UserProfile {
   'id' : Principal,
   'name' : string,
@@ -39,23 +48,33 @@ export type UserRole__1 = { 'admin' : null } |
   { 'guest' : null };
 export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
+  'addProduct' : ActorMethod<[string, string, number, string], bigint>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole__1], undefined>,
   'createOrder' : ActorMethod<[string], bigint>,
   'createUserProfile' : ActorMethod<[PhoneNumber, string, UserRole], undefined>,
+  'deleteProduct' : ActorMethod<[bigint], undefined>,
   'generateOtp' : ActorMethod<[PhoneNumber], string>,
+  'getAllCustomers' : ActorMethod<[], Array<UserProfile>>,
   'getAllOrders' : ActorMethod<[], Array<Order>>,
+  'getAllProducts' : ActorMethod<[], Array<Product>>,
   'getAllUsers' : ActorMethod<[], Array<UserProfile>>,
+  'getAllVendors' : ActorMethod<[], Array<UserProfile>>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole__1>,
   'getOrderById' : ActorMethod<[bigint], [] | [Order]>,
   'getOrderStatus' : ActorMethod<[bigint], [] | [OrderStatus]>,
   'getOrdersByCustomer' : ActorMethod<[Principal], Array<Order>>,
   'getOrdersByStatus' : ActorMethod<[OrderStatus], Array<Order>>,
+  'getProductsByVendor' : ActorMethod<[Principal], Array<Product>>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'isNewUser' : ActorMethod<[PhoneNumber], boolean>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'updateOrderStatus' : ActorMethod<[bigint, OrderStatus], undefined>,
+  'updateProduct' : ActorMethod<
+    [bigint, string, string, number, string],
+    undefined
+  >,
   'updateUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'verifyOtp' : ActorMethod<[PhoneNumber, string], boolean>,
 }

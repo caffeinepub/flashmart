@@ -4,19 +4,22 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   CheckCircle2,
   Loader2,
+  LogOut,
   MapPin,
   Package,
   RefreshCw,
   Truck,
 } from "lucide-react";
 import { motion } from "motion/react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { type Order, OrderStatus } from "../backend";
+import ConfirmModal from "../components/ConfirmModal";
 import { useApp } from "../context/AppContext";
 import { useOrdersByStatus, useUpdateOrderStatus } from "../hooks/useQueries";
 
 export default function DeliveryDashboard() {
-  const { currentUser } = useApp();
+  const { currentUser, navigate } = useApp();
   const {
     data: confirmedOrders = [],
     isLoading: loadingConfirmed,
@@ -27,45 +30,81 @@ export default function DeliveryDashboard() {
   );
   const { data: pickedOrders = [] } = useOrdersByStatus(OrderStatus.pickedUp);
   const updateStatus = useUpdateOrderStatus();
+  const [confirmModal, setConfirmModal] = useState<{
+    open: boolean;
+    message: string;
+    action: (() => void) | null;
+  }>({ open: false, message: "", action: null });
 
-  const handleAcceptDelivery = async (order: Order) => {
-    try {
-      await updateStatus.mutateAsync({
-        orderId: order.id,
-        status: OrderStatus.riderAssigned,
-      });
-      toast.success(`Delivery accepted for "${order.itemName}"!`);
-    } catch (e: any) {
-      toast.error(e?.message || "Failed.");
-    }
+  const openConfirm = (message: string, action: () => void) => {
+    setConfirmModal({ open: true, message, action });
   };
 
-  const handleMarkPickedUp = async (order: Order) => {
-    try {
-      await updateStatus.mutateAsync({
-        orderId: order.id,
-        status: OrderStatus.pickedUp,
-      });
-      toast.success("Marked as picked up!");
-    } catch (e: any) {
-      toast.error(e?.message || "Failed.");
-    }
+  const handleConfirm = () => {
+    confirmModal.action?.();
+    setConfirmModal({ open: false, message: "", action: null });
   };
 
-  const handleMarkDelivered = async (order: Order) => {
-    try {
-      await updateStatus.mutateAsync({
-        orderId: order.id,
-        status: OrderStatus.delivered,
-      });
-      toast.success("Order delivered! Great job 🎉");
-    } catch (e: any) {
-      toast.error(e?.message || "Failed.");
-    }
+  const handleCancel = () => {
+    setConfirmModal({ open: false, message: "", action: null });
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("deliveryAccess");
+    navigate("landing");
+  };
+
+  const handleAcceptDelivery = (order: Order) => {
+    openConfirm(`Accept delivery for "${order.itemName}"?`, async () => {
+      try {
+        await updateStatus.mutateAsync({
+          orderId: order.id,
+          status: OrderStatus.riderAssigned,
+        });
+        toast.success(`Delivery accepted for "${order.itemName}"!`);
+      } catch (e: any) {
+        toast.error(e?.message || "Failed.");
+      }
+    });
+  };
+
+  const handleMarkPickedUp = (order: Order) => {
+    openConfirm(`Mark "${order.itemName}" as picked up?`, async () => {
+      try {
+        await updateStatus.mutateAsync({
+          orderId: order.id,
+          status: OrderStatus.pickedUp,
+        });
+        toast.success("Marked as picked up!");
+      } catch (e: any) {
+        toast.error(e?.message || "Failed.");
+      }
+    });
+  };
+
+  const handleMarkDelivered = (order: Order) => {
+    openConfirm(`Mark "${order.itemName}" as delivered?`, async () => {
+      try {
+        await updateStatus.mutateAsync({
+          orderId: order.id,
+          status: OrderStatus.delivered,
+        });
+        toast.success("Order delivered! Great job 🎉");
+      } catch (e: any) {
+        toast.error(e?.message || "Failed.");
+      }
+    });
   };
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
+      <ConfirmModal
+        open={confirmModal.open}
+        message={confirmModal.message}
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+      />
+
       <div className="mb-6 flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">
@@ -75,16 +114,28 @@ export default function DeliveryDashboard() {
             {currentUser?.name || "Delivery Partner"} · Find and deliver orders
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => refetch()}
-          className="gap-1.5"
-          data-ocid="delivery.refresh.button"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            className="gap-1.5"
+            data-ocid="delivery.refresh.button"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Refresh
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLogout}
+            className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+            data-ocid="delivery.logout.button"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Logout
+          </Button>
+        </div>
       </div>
 
       {/* Available to Accept */}

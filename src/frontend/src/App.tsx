@@ -3,13 +3,16 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect } from "react";
 import { UserRole } from "./backend";
 import { AppProvider, type AppScreen, useApp } from "./context/AppContext";
+import { CartProvider } from "./context/CartContext";
 import { useActor } from "./hooks/useActor";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import { useCallerProfile } from "./hooks/useQueries";
 
 import Footer from "./components/Footer";
 import Header from "./components/Header";
+import ProtectedRoute from "./components/ProtectedRoute";
 import AdminPanel from "./pages/AdminPanel";
+import CartPage from "./pages/CartPage";
 import CustomerDashboard from "./pages/CustomerDashboard";
 import DeliveryDashboard from "./pages/DeliveryDashboard";
 import LandingPage from "./pages/LandingPage";
@@ -28,6 +31,7 @@ const DASHBOARD_SCREENS: AppScreen[] = [
   "vendor-dashboard",
   "delivery-dashboard",
   "admin-panel",
+  "cart",
 ];
 
 function roleToScreen(role: UserRole): AppScreen {
@@ -58,7 +62,6 @@ function AppContent() {
 
   const isAuthenticated = !!identity;
 
-  // Auto-route when identity/profile changes
   useEffect(() => {
     if (actorFetching) return;
 
@@ -69,17 +72,14 @@ function AppContent() {
       return;
     }
 
-    // ICP-authenticated
     if (!profileFetched || profileLoading) return;
 
     if (userProfile === null || userProfile === undefined) {
-      // No profile → phone login flow
       if (!AUTH_SCREENS.includes(screen)) {
         navigate("phone-login");
       }
     } else {
       setCurrentUser(userProfile);
-      // Has profile → route to dashboard if not already there
       if (!DASHBOARD_SCREENS.includes(screen)) {
         navigate(roleToScreen(userProfile.role));
       }
@@ -114,10 +114,26 @@ function AppContent() {
         return <RoleSelectionPage />;
       case "customer-dashboard":
         return <CustomerDashboard />;
+      case "cart":
+        return <CartPage />;
       case "vendor-dashboard":
-        return <VendorDashboard />;
+        return (
+          <ProtectedRoute
+            dashboardRole="vendor"
+            onCancel={() => navigate("landing")}
+          >
+            <VendorDashboard />
+          </ProtectedRoute>
+        );
       case "delivery-dashboard":
-        return <DeliveryDashboard />;
+        return (
+          <ProtectedRoute
+            dashboardRole="delivery"
+            onCancel={() => navigate("landing")}
+          >
+            <DeliveryDashboard />
+          </ProtectedRoute>
+        );
       case "admin-panel":
         return <AdminPanel />;
       default:
@@ -138,7 +154,9 @@ function AppContent() {
 export default function App() {
   return (
     <AppProvider>
-      <AppContent />
+      <CartProvider>
+        <AppContent />
+      </CartProvider>
     </AppProvider>
   );
 }

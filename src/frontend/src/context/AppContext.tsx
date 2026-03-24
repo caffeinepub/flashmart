@@ -9,7 +9,8 @@ export type AppScreen =
   | "customer-dashboard"
   | "vendor-dashboard"
   | "delivery-dashboard"
-  | "admin-panel";
+  | "admin-panel"
+  | "cart";
 
 interface AppContextType {
   screen: AppScreen;
