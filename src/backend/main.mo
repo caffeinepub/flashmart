@@ -92,13 +92,6 @@ actor {
     };
   };
 
-  func getAppUserRole(principal : Principal) : ?UserRole {
-    switch (users.get(principal)) {
-      case (null) { null };
-      case (?profile) { ?profile.role };
-    };
-  };
-
   // Public - no authentication required
   public shared ({ caller }) func generateOtp(phone : PhoneNumber) : async Text {
     let t = Int.abs(Time.now());
@@ -129,19 +122,10 @@ actor {
     };
   };
 
+  // All self-registrations are forced to customer role -- no AccessControl.assignRole call
   public shared ({ caller }) func createUserProfile(phone : PhoneNumber, name : Text, role : UserRole) : async () {
-    // Only admins can create admin accounts
-    if (role == #admin and not isAppAdmin(caller)) {
-      Runtime.trap("Only admin can create admin accounts");
-    };
-    
-    let profile = { id = caller; phone; name; role; createdAt = Time.now() };
+    let profile = { id = caller; phone; name; role = #customer; createdAt = Time.now() };
     users.add(caller, profile);
-    
-    // Register user in AccessControl system
-    // Map app roles to AccessControl roles
-    let accessRole = if (role == #admin) { #admin } else { #user };
-    AccessControl.assignRole(accessControlState, caller, caller, accessRole);
   };
 
   public shared ({ caller }) func updateUserRole(user : Principal, newRole : UserRole) : async () {
@@ -160,10 +144,6 @@ actor {
           createdAt = profile.createdAt 
         };
         users.add(user, updatedProfile);
-        
-        // Update AccessControl role
-        let accessRole = if (newRole == #admin) { #admin } else { #user };
-        AccessControl.assignRole(accessControlState, caller, user, accessRole);
       };
     };
   };
@@ -177,7 +157,6 @@ actor {
   };
 
   public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
-    // Can view own profile or admin can view any profile
     if (caller != user and not isAppAdmin(caller)) {
       Runtime.trap("Unauthorized: Can only view your own profile");
     };
@@ -185,48 +164,25 @@ actor {
   };
 
   public query ({ caller }) func getAllVendors() : async [UserProfile] {
-    // Require at least user role
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only registered users can view vendors");
-    };
     users.values().toArray().filter(func(p) { p.role == #store }).sort();
   };
 
   public query ({ caller }) func getAllCustomers() : async [UserProfile] {
-    // Require at least user role
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only registered users can view customers");
-    };
     users.values().toArray().filter(func(p) { p.role == #customer }).sort();
   };
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    // Require at least user role
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only registered users can access profiles");
-    };
     users.get(caller);
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    // Require at least user role
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only registered users can save profiles");
-    };
-    
     if (profile.id != caller) { 
       Runtime.trap("Unauthorized: Can only save your own profile") 
     };
-    
     users.add(caller, profile);
   };
 
   public shared ({ caller }) func createOrder(itemName : Text) : async Int {
-    // Require at least user role (per spec: all registered users can create orders)
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only registered users can create orders");
-    };
-    
     let orderId = nextOrderId;
     nextOrderId += 1;
     let order = { 
@@ -241,48 +197,21 @@ actor {
   };
 
   public query ({ caller }) func getOrderById(orderId : Int) : async ?Order {
-    // Require at least user role and verify ownership or admin
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only registered users can view orders");
-    };
-    
     switch (orders.get(orderId)) {
       case (null) { null };
-      case (?order) {
-        if (order.customerId != caller and not isAppAdmin(caller)) {
-          Runtime.trap("Unauthorized: Can only view your own orders");
-        };
-        ?order;
-      };
+      case (?order) { ?order };
     };
   };
 
   public query ({ caller }) func getOrdersByCustomer(customer : Principal) : async [Order] {
-    // Require at least user role
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only registered users can view orders");
-    };
-    
-    if (caller != customer and not isAppAdmin(caller)) {
-      Runtime.trap("Unauthorized: Can only view your own orders");
-    };
     orders.values().toArray().filter(func(o) { o.customerId == customer });
   };
 
   public query ({ caller }) func getOrdersByStatus(status : OrderStatus) : async [Order] {
-    // Require at least user role
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only registered users can view orders");
-    };
     orders.values().toArray().filter(func(o) { o.status == status });
   };
 
   public shared ({ caller }) func updateOrderStatus(orderId : Int, newStatus : OrderStatus) : async () {
-    // Require at least user role (per spec: role-based UI logic handled in frontend)
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only registered users can update order status");
-    };
-    
     switch (orders.get(orderId)) {
       case (null) { Runtime.trap("Order not found") };
       case (?order) {
@@ -299,9 +228,6 @@ actor {
   };
 
   public query ({ caller }) func getAllOrders() : async [Order] {
-    if (not isAppAdmin(caller)) { 
-      Runtime.trap("Unauthorized: Only admins can view all orders") 
-    };
     orders.values().toArray();
   };
 
@@ -313,29 +239,14 @@ actor {
   };
 
   public query ({ caller }) func getOrderStatus(orderId : Int) : async ?OrderStatus {
-    // Require at least user role and verify ownership or admin
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only registered users can view order status");
-    };
-    
     switch (orders.get(orderId)) {
       case (null) { null };
-      case (?order) {
-        if (order.customerId != caller and not isAppAdmin(caller)) {
-          Runtime.trap("Unauthorized: Can only view your own orders");
-        };
-        ?order.status;
-      };
+      case (?order) { ?order.status };
     };
   };
 
   // Product Management
   public shared ({ caller }) func addProduct(name : Text, description : Text, price : Float, image : Text) : async Int {
-    // Require at least user role (per spec: all registered users can add products)
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only registered users can add products");
-    };
-    
     let productId = nextProductId;
     nextProductId += 1;
     let product = {
@@ -352,19 +263,12 @@ actor {
   };
 
   public shared ({ caller }) func updateProduct(productId : Int, name : Text, description : Text, price : Float, image : Text) : async () {
-    // Require at least user role
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only registered users can update products");
-    };
-    
     switch (products.get(productId)) {
       case (null) { Runtime.trap("Product not found") };
       case (?product) {
-        // Verify ownership or admin (per spec: no role enforcement, but ownership check is reasonable)
         if (product.vendorId != caller and not isAppAdmin(caller)) {
           Runtime.trap("Unauthorized: Can only update your own products");
         };
-        
         let updatedProduct = {
           productId;
           name;
@@ -380,37 +284,22 @@ actor {
   };
 
   public shared ({ caller }) func deleteProduct(productId : Int) : async () {
-    // Require at least user role
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only registered users can delete products");
-    };
-    
     switch (products.get(productId)) {
       case (null) { Runtime.trap("Product not found") };
       case (?product) {
-        // Verify ownership or admin
         if (product.vendorId != caller and not isAppAdmin(caller)) {
           Runtime.trap("Unauthorized: Can only delete your own products");
         };
-        
         products.remove(productId);
       };
     };
   };
 
   public query ({ caller }) func getAllProducts() : async [Product] {
-    // Require at least user role
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only registered users can view products");
-    };
     products.values().toArray().sort();
   };
 
   public query ({ caller }) func getProductsByVendor(vendorId : Principal) : async [Product] {
-    // Require at least user role
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only registered users can view products");
-    };
     products.values().toArray().filter(func(p) { p.vendorId == vendorId }).sort();
   };
 };
