@@ -1,10 +1,19 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { MapPin, Minus, Plus, ShoppingCart, Trash2, User } from "lucide-react";
+import {
+  MapPin,
+  Minus,
+  Navigation,
+  Plus,
+  ShoppingCart,
+  Trash2,
+  User,
+} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
 import ConfirmModal from "../components/ConfirmModal";
+import MapPickerModal from "../components/MapPickerModal";
 import { useApp } from "../context/AppContext";
 import { useCart } from "../context/CartContext";
 import { useLocation } from "../hooks/useLocation";
@@ -27,6 +36,11 @@ export default function CartPage() {
     message: string;
     action: (() => void) | null;
   }>({ open: false, message: "", action: null });
+  const [mapOpen, setMapOpen] = useState(false);
+  const [pinnedLocation, setPinnedLocation] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
 
   const [customer, setCustomer] = useState<CustomerDetails>(() => {
     try {
@@ -36,7 +50,9 @@ export default function CartPage() {
       return { name: "", phone: "", address: "" };
     }
   });
-  const [formErrors, setFormErrors] = useState<Partial<CustomerDetails>>({});
+  const [formErrors, setFormErrors] = useState<
+    Partial<CustomerDetails & { pin: string }>
+  >({});
 
   const handleFieldChange = (field: keyof CustomerDetails, value: string) => {
     setCustomer((prev) => ({ ...prev, [field]: value }));
@@ -46,19 +62,28 @@ export default function CartPage() {
   };
 
   const validateForm = (): boolean => {
-    const errors: Partial<CustomerDetails> = {};
+    const errors: Partial<CustomerDetails & { pin: string }> = {};
     if (!customer.name.trim()) errors.name = "Name is required";
     if (!customer.phone.trim()) errors.phone = "Phone number is required";
     if (!customer.address.trim()) errors.address = "Address is required";
+    if (!pinnedLocation)
+      errors.pin = "Please pin your delivery location on the map";
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
+  };
+
+  const handlePinConfirm = (lat: number, lng: number) => {
+    setPinnedLocation({ lat, lng });
+    setMapOpen(false);
+    setFormErrors((prev) => ({ ...prev, pin: undefined }));
+    toast.success("Location pinned successfully!");
   };
 
   const handlePlaceOrder = () => {
     if (items.length === 0) return;
     if (status !== "in_range") return;
     if (!validateForm()) {
-      toast.error("Please fill in all customer details.");
+      toast.error("Please fill in all details and pin your location.");
       return;
     }
     const summary = items.map((i) => `${i.name} x${i.quantity}`).join(", ");
@@ -72,6 +97,8 @@ export default function CartPage() {
             customerName: customer.name.trim(),
             customerPhone: customer.phone.trim(),
             customerAddress: customer.address.trim(),
+            pinnedLatitude: pinnedLocation!.lat,
+            pinnedLongitude: pinnedLocation!.lng,
             items: summary,
           });
           await createOrder.mutateAsync(orderPayload);
@@ -162,6 +189,14 @@ export default function CartPage() {
         onCancel={() =>
           setConfirmModal({ open: false, message: "", action: null })
         }
+      />
+
+      <MapPickerModal
+        open={mapOpen}
+        initialLat={pinnedLocation?.lat}
+        initialLng={pinnedLocation?.lng}
+        onConfirm={handlePinConfirm}
+        onClose={() => setMapOpen(false)}
       />
 
       {/* Header */}
@@ -353,6 +388,59 @@ export default function CartPage() {
                   <p className="text-xs text-red-500 mt-1">
                     {formErrors.address}
                   </p>
+                )}
+              </div>
+
+              {/* Pin Location */}
+              <div>
+                <p className="block text-xs font-bold text-gray-700 mb-1">
+                  Pinned Location <span className="text-red-500">*</span>
+                </p>
+                {pinnedLocation ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                      <MapPin className="w-4 h-4 text-green-600 flex-shrink-0" />
+                      <span className="text-xs text-green-700 font-semibold">
+                        Selected Location: {pinnedLocation.lat.toFixed(5)},{" "}
+                        {pinnedLocation.lng.toFixed(5)}
+                      </span>
+                    </div>
+                    {/* Mini map preview iframe */}
+                    <div
+                      className="rounded-lg overflow-hidden border border-gray-200"
+                      style={{ height: 140 }}
+                    >
+                      <iframe
+                        title="Pinned location preview"
+                        width="100%"
+                        height="140"
+                        style={{ border: 0 }}
+                        loading="lazy"
+                        src={`https://www.openstreetmap.org/export/embed.html?bbox=${pinnedLocation.lng - 0.005},${pinnedLocation.lat - 0.005},${pinnedLocation.lng + 0.005},${pinnedLocation.lat + 0.005}&layer=mapnik&marker=${pinnedLocation.lat},${pinnedLocation.lng}`}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setMapOpen(true)}
+                      className="w-full text-xs font-bold text-blue-600 border border-blue-200 rounded-lg px-3 py-2 hover:bg-blue-50 transition-colors"
+                    >
+                      Change Location
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Button
+                      type="button"
+                      onClick={() => setMapOpen(true)}
+                      className="w-full h-10 font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 justify-center"
+                    >
+                      <Navigation className="w-4 h-4" />
+                      Pin Location on Map
+                    </Button>
+                    {formErrors.pin && (
+                      <p className="text-xs text-red-500">{formErrors.pin}</p>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

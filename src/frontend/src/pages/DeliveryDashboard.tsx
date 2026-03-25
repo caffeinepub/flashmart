@@ -6,6 +6,7 @@ import {
   Loader2,
   LogOut,
   MapPin,
+  Navigation,
   Package,
   Phone,
   RefreshCw,
@@ -24,6 +25,8 @@ interface ParsedOrderData {
   customerName: string | null;
   customerPhone: string | null;
   customerAddress: string | null;
+  pinnedLatitude: number | null;
+  pinnedLongitude: number | null;
   items: string;
 }
 
@@ -35,6 +38,12 @@ function parseOrderData(itemName: string): ParsedOrderData {
         customerName: parsed.customerName || null,
         customerPhone: parsed.customerPhone || null,
         customerAddress: parsed.customerAddress || null,
+        pinnedLatitude:
+          parsed.pinnedLatitude != null ? Number(parsed.pinnedLatitude) : null,
+        pinnedLongitude:
+          parsed.pinnedLongitude != null
+            ? Number(parsed.pinnedLongitude)
+            : null,
         items: parsed.items || itemName,
       };
     }
@@ -45,35 +54,103 @@ function parseOrderData(itemName: string): ParsedOrderData {
     customerName: null,
     customerPhone: null,
     customerAddress: null,
+    pinnedLatitude: null,
+    pinnedLongitude: null,
     items: itemName,
   };
 }
 
 function CustomerInfo({ data }: { data: ParsedOrderData }) {
-  if (!data.customerName && !data.customerPhone && !data.customerAddress)
+  const hasPinned = data.pinnedLatitude != null && data.pinnedLongitude != null;
+  const mapsUrl = hasPinned
+    ? `https://www.google.com/maps?q=${data.pinnedLatitude},${data.pinnedLongitude}`
+    : null;
+  const navigateUrl = hasPinned
+    ? `https://www.google.com/maps/dir/?api=1&destination=${data.pinnedLatitude},${data.pinnedLongitude}`
+    : null;
+
+  if (
+    !data.customerName &&
+    !data.customerPhone &&
+    !data.customerAddress &&
+    !hasPinned
+  )
     return null;
+
   return (
-    <div className="mt-2 mb-3 bg-muted/60 rounded-lg px-3 py-2 space-y-1">
-      {data.customerName && (
-        <div className="flex items-center gap-1.5 text-xs text-foreground">
-          <User className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-          <span className="font-medium">{data.customerName}</span>
-        </div>
-      )}
-      {data.customerPhone && (
-        <a
-          href={`tel:${data.customerPhone}`}
-          className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium"
-          data-ocid="delivery.call.link"
-        >
-          <Phone className="w-3 h-3 flex-shrink-0" />
-          {data.customerPhone}
-        </a>
-      )}
-      {data.customerAddress && (
-        <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
-          <MapPin className="w-3 h-3 flex-shrink-0 mt-0.5 text-muted-foreground" />
-          <span>{data.customerAddress}</span>
+    <div className="mt-2 mb-3 space-y-2">
+      {/* Customer Info */}
+      <div className="bg-muted/60 rounded-lg px-3 py-2 space-y-1">
+        {data.customerName && (
+          <div className="flex items-center gap-1.5 text-xs text-foreground">
+            <User className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+            <span className="font-medium">{data.customerName}</span>
+          </div>
+        )}
+        {data.customerPhone && (
+          <a
+            href={`tel:${data.customerPhone}`}
+            className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium"
+            data-ocid="delivery.call.link"
+          >
+            <Phone className="w-3 h-3 flex-shrink-0" />
+            {data.customerPhone} · Call Customer
+          </a>
+        )}
+        {data.customerAddress && (
+          <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+            <MapPin className="w-3 h-3 flex-shrink-0 mt-0.5 text-muted-foreground" />
+            <span>{data.customerAddress}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Pinned Location Section */}
+      {hasPinned && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-lg px-3 py-1.5">
+            <MapPin className="w-3 h-3 text-green-600 flex-shrink-0" />
+            <span className="text-xs text-green-700 font-semibold">
+              Pinned: {data.pinnedLatitude!.toFixed(4)},{" "}
+              {data.pinnedLongitude!.toFixed(4)}
+            </span>
+          </div>
+
+          {/* Mini map iframe */}
+          <div className="rounded-lg overflow-hidden border border-gray-200">
+            <iframe
+              title="Customer pinned location"
+              width="100%"
+              height="130"
+              style={{ border: 0, display: "block" }}
+              loading="lazy"
+              src={`https://www.openstreetmap.org/export/embed.html?bbox=${data.pinnedLongitude! - 0.005},${data.pinnedLatitude! - 0.005},${data.pinnedLongitude! + 0.005},${data.pinnedLatitude! + 0.005}&layer=mapnik&marker=${data.pinnedLatitude},${data.pinnedLongitude}`}
+            />
+          </div>
+
+          {/* Map action buttons */}
+          <div className="grid grid-cols-2 gap-2">
+            <a
+              href={mapsUrl!}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-3 py-2 transition-colors"
+              data-ocid="delivery.view_pinned.button"
+            >
+              <MapPin className="w-3.5 h-3.5" />
+              View Location
+            </a>
+            <a
+              href={navigateUrl!}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 rounded-lg px-3 py-2 transition-colors"
+              data-ocid="delivery.navigate.button"
+            >
+              <Navigation className="w-3.5 h-3.5" />
+              Navigate
+            </a>
+          </div>
         </div>
       )}
     </div>
@@ -125,8 +202,8 @@ export default function DeliveryDashboard() {
           status: OrderStatus.riderAssigned,
         });
         toast.success("Delivery accepted!");
-      } catch (e: any) {
-        toast.error(e?.message || "Failed.");
+      } catch (e: unknown) {
+        toast.error((e as Error)?.message || "Failed.");
       }
     });
   };
@@ -140,8 +217,8 @@ export default function DeliveryDashboard() {
           status: OrderStatus.pickedUp,
         });
         toast.success("Marked as picked up!");
-      } catch (e: any) {
-        toast.error(e?.message || "Failed.");
+      } catch (e: unknown) {
+        toast.error((e as Error)?.message || "Failed.");
       }
     });
   };
@@ -155,8 +232,8 @@ export default function DeliveryDashboard() {
           status: OrderStatus.delivered,
         });
         toast.success("Order delivered! Great job 🎉");
-      } catch (e: any) {
-        toast.error(e?.message || "Failed.");
+      } catch (e: unknown) {
+        toast.error((e as Error)?.message || "Failed.");
       }
     });
   };

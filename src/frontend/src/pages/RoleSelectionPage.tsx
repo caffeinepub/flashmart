@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, ShoppingBag, Store, Truck } from "lucide-react";
+import { Lock, ShoppingBag, Store, Truck } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -10,52 +10,15 @@ import { UserRole } from "../backend";
 import { useApp } from "../context/AppContext";
 import { useActor } from "../hooks/useActor";
 
-const roleOptions = [
-  {
-    role: UserRole.customer,
-    icon: ShoppingBag,
-    title: "Customer",
-    desc: "Order items from nearby stores.",
-    color: "text-primary",
-    bg: "bg-primary/10",
-    border: "border-primary",
-    screen: "customer-dashboard" as const,
-  },
-  {
-    role: UserRole.store,
-    icon: Store,
-    title: "Store Vendor",
-    desc: "Accept and fulfill local orders.",
-    color: "text-chart-2",
-    bg: "bg-chart-2/10",
-    border: "border-chart-2",
-    screen: "vendor-dashboard" as const,
-  },
-  {
-    role: UserRole.deliveryP,
-    icon: Truck,
-    title: "Delivery Partner",
-    desc: "Pick up and deliver orders.",
-    color: "text-chart-3",
-    bg: "bg-chart-3/10",
-    border: "border-chart-3",
-    screen: "delivery-dashboard" as const,
-  },
-];
-
 export default function RoleSelectionPage() {
   const { actor } = useActor();
   const { navigate, currentPhone, setCurrentUser } = useApp();
   const queryClient = useQueryClient();
-  const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showAdminMsg, setShowAdminMsg] = useState<string | null>(null);
 
   const handleContinue = async () => {
-    if (!selectedRole) {
-      toast.error("Please select a role.");
-      return;
-    }
     if (!actor) {
       toast.error("Not connected.");
       return;
@@ -65,17 +28,14 @@ export default function RoleSelectionPage() {
       await actor.createUserProfile(
         currentPhone,
         name.trim() || "FlashMart User",
-        selectedRole,
+        UserRole.customer,
       );
       const profile = await actor.getCallerUserProfile();
       if (profile) {
         setCurrentUser(profile);
         queryClient.setQueryData(["callerProfile"], profile);
       }
-      const target =
-        roleOptions.find((r) => r.role === selectedRole)?.screen ??
-        "customer-dashboard";
-      navigate(target);
+      navigate("customer-dashboard");
       toast.success("Profile created! Welcome to FlashMart.");
     } catch (e: any) {
       toast.error(e?.message || "Failed to create profile.");
@@ -101,10 +61,7 @@ export default function RoleSelectionPage() {
           </p>
         </div>
 
-        <div
-          className="bg-card border border-border rounded-xl shadow-card p-6 space-y-4"
-          data-ocid="role.panel"
-        >
+        <div className="bg-card border border-border rounded-xl shadow-card p-6 space-y-4">
           {/* Name */}
           <div className="space-y-1.5">
             <Label
@@ -120,53 +77,108 @@ export default function RoleSelectionPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="border-border bg-white text-foreground"
-              data-ocid="role.name.input"
             />
           </div>
 
-          {/* Role cards */}
+          {/* Customer — selectable */}
           <div className="grid gap-3">
-            {roleOptions.map((opt, i) => (
-              <motion.button
-                key={opt.role}
+            <motion.div
+              initial={{ opacity: 0, x: -16 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0 }}
+              className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-primary bg-primary/5 text-left"
+            >
+              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                <ShoppingBag className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="font-bold text-sm text-foreground">Customer</p>
+                <p className="text-xs text-foreground/70">
+                  Order items from nearby stores.
+                </p>
+              </div>
+              <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
+                <svg
+                  role="img"
+                  aria-label="Selected"
+                  className="w-3 h-3 text-white"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={3}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+              </div>
+            </motion.div>
+
+            {/* Store Vendor — locked */}
+            {(
+              [
+                {
+                  icon: Store,
+                  title: "Store Vendor",
+                  desc: "Accept and fulfill local orders.",
+                  color: "text-chart-2",
+                  bg: "bg-chart-2/10",
+                },
+                {
+                  icon: Truck,
+                  title: "Delivery Partner",
+                  desc: "Pick up and deliver orders.",
+                  color: "text-chart-3",
+                  bg: "bg-chart-3/10",
+                },
+              ] as const
+            ).map((opt, i) => (
+              <motion.div
+                key={opt.title}
                 initial={{ opacity: 0, x: -16 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.08 * i }}
-                onClick={() => setSelectedRole(opt.role)}
-                className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
-                  selectedRole === opt.role
-                    ? `${opt.border} bg-primary/5`
-                    : "border-border hover:border-foreground/40"
-                }`}
-                data-ocid={`role.${opt.title.toLowerCase().replace(" ", "_")}.button`}
+                transition={{ delay: 0.08 * (i + 1) }}
               >
-                <div
-                  className={`w-10 h-10 ${opt.bg} rounded-lg flex items-center justify-center flex-shrink-0`}
+                <button
+                  type="button"
+                  onClick={() => setShowAdminMsg(opt.title)}
+                  className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-border bg-muted/30 text-left opacity-75 cursor-pointer hover:bg-muted/50 transition-all"
                 >
-                  <opt.icon className={`w-5 h-5 ${opt.color}`} />
-                </div>
-                <div className="flex-1">
-                  <p className="font-bold text-sm text-foreground">
-                    {opt.title}
-                  </p>
-                  <p className="text-xs text-foreground/70">{opt.desc}</p>
-                </div>
-                {selectedRole === opt.role && (
-                  <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
-                    <Check className="w-3 h-3 text-white" />
+                  <div
+                    className={`w-10 h-10 ${opt.bg} rounded-lg flex items-center justify-center flex-shrink-0`}
+                  >
+                    <opt.icon className={`w-5 h-5 ${opt.color}`} />
                   </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-sm text-foreground">
+                      {opt.title}
+                    </p>
+                    <p className="text-xs text-foreground/70">{opt.desc}</p>
+                  </div>
+                  <Lock className="w-4 h-4 text-foreground/40 flex-shrink-0" />
+                </button>
+
+                {showAdminMsg === opt.title && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-2 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold text-center"
+                  >
+                    🔒 Access will be granted by admin
+                  </motion.div>
                 )}
-              </motion.button>
+              </motion.div>
             ))}
           </div>
 
           <Button
             onClick={handleContinue}
-            disabled={!selectedRole || loading}
+            disabled={loading}
             className="w-full bg-primary hover:bg-primary/90 text-white font-semibold"
-            data-ocid="role.continue.submit_button"
           >
-            {loading ? "Setting up..." : "Continue"}
+            {loading ? "Setting up..." : "Continue as Customer"}
           </Button>
         </div>
       </motion.div>
