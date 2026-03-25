@@ -1,6 +1,15 @@
-import { Button } from "@/components/ui/button";
+import L from "leaflet";
 import { MapPin, X } from "lucide-react";
+import "leaflet/dist/leaflet.css";
+import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
+
+import iconRetinaUrl from "leaflet/dist/images/marker-icon-2x.png";
+// Fix default marker icons broken by bundlers
+import iconUrl from "leaflet/dist/images/marker-icon.png";
+import shadowUrl from "leaflet/dist/images/marker-shadow.png";
+
+L.Icon.Default.mergeOptions({ iconUrl, iconRetinaUrl, shadowUrl });
 
 interface Props {
   open: boolean;
@@ -12,32 +21,7 @@ interface Props {
 
 const DEFAULT_LAT = 17.339;
 const DEFAULT_LNG = 78.5583;
-const ZOOM = 15;
-
-function latLngToPixel(
-  lat: number,
-  lng: number,
-  centerLat: number,
-  centerLng: number,
-  zoom: number,
-  widthPx: number,
-  heightPx: number,
-): { x: number; y: number } {
-  const scale = 2 ** zoom;
-  const toX = (ln: number) => ((ln + 180) / 360) * scale * 256;
-  const toY = (la: number) => {
-    const sinLat = Math.sin((la * Math.PI) / 180);
-    return (
-      ((1 - Math.log((1 + sinLat) / (1 - sinLat)) / (2 * Math.PI)) / 2) *
-      scale *
-      256
-    );
-  };
-  return {
-    x: widthPx / 2 + (toX(lng) - toX(centerLng)),
-    y: heightPx / 2 + (toY(lat) - toY(centerLat)),
-  };
-}
+const DEFAULT_ZOOM = 15;
 
 export default function MapPickerModal({
   open,
@@ -46,16 +30,91 @@ export default function MapPickerModal({
   onConfirm,
   onClose,
 }: Props) {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const markerRef = useRef<L.Marker | null>(null);
   const [pin, setPin] = useState<{ lat: number; lng: number } | null>(
     initialLat && initialLng ? { lat: initialLat, lng: initialLng } : null,
   );
-  const [center] = useState({
-    lat: initialLat ?? DEFAULT_LAT,
-    lng: initialLng ?? DEFAULT_LNG,
-  });
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [dims, setDims] = useState({ w: 400, h: 360 });
 
+  // Initialize map when modal opens
+  useEffect(() => {
+    if (!open) {
+      // Destroy map when modal closes to avoid ghost instances
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+        markerRef.current = null;
+      }
+      return;
+    }
+
+    // Wait for DOM to be ready
+    const timer = setTimeout(() => {
+      if (!mapContainerRef.current || mapRef.current) return;
+
+      const startLat = initialLat ?? DEFAULT_LAT;
+      const startLng = initialLng ?? DEFAULT_LNG;
+
+      const map = L.map(mapContainerRef.current, {
+        center: [startLat, startLng],
+        zoom: DEFAULT_ZOOM,
+        zoomControl: true,
+        scrollWheelZoom: true,
+        touchZoom: true,
+        doubleClickZoom: true,
+      });
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap contributors",
+        maxZoom: 19,
+      }).addTo(map);
+
+      // Place initial marker if coordinates provided
+      if (initialLat && initialLng) {
+        const marker = L.marker([initialLat, initialLng], {
+          draggable: true,
+        }).addTo(map);
+        markerRef.current = marker;
+        marker.on("dragend", () => {
+          const pos = marker.getLatLng();
+          setPin({ lat: pos.lat, lng: pos.lng });
+        });
+      }
+
+      // Click to place/move marker
+      map.on("click", (e: L.LeafletMouseEvent) => {
+        const { lat, lng } = e.latlng;
+
+        // Remove previous marker
+        if (markerRef.current) {
+          markerRef.current.remove();
+          markerRef.current = null;
+        }
+
+        // Place new marker
+        const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+        markerRef.current = marker;
+
+        // Allow dragging to fine-tune
+        marker.on("dragend", () => {
+          const pos = marker.getLatLng();
+          setPin({ lat: pos.lat, lng: pos.lng });
+        });
+
+        setPin({ lat, lng });
+      });
+
+      mapRef.current = map;
+
+      // Force size recalculation
+      setTimeout(() => map.invalidateSize(), 100);
+    }, 50);
+
+    return () => clearTimeout(timer);
+  }, [open, initialLat, initialLng]);
+
+  // Reset pin state when modal opens
   useEffect(() => {
     if (open) {
       setPin(
@@ -64,67 +123,7 @@ export default function MapPickerModal({
     }
   }, [open, initialLat, initialLng]);
 
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const ro = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setDims({ w: entry.contentRect.width, h: entry.contentRect.height });
-      }
-    });
-    ro.observe(containerRef.current);
-    return () => ro.disconnect();
-  }, []);
-
-  const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const relX = e.clientX - rect.left;
-    const relY = e.clientY - rect.top;
-    const w = rect.width;
-    const h = rect.height;
-
-    const scale = 2 ** ZOOM;
-    const toX = (ln: number) => ((ln + 180) / 360) * scale * 256;
-    const toY = (la: number) => {
-      const sinLat = Math.sin((la * Math.PI) / 180);
-      return (
-        ((1 - Math.log((1 + sinLat) / (1 - sinLat)) / (2 * Math.PI)) / 2) *
-        scale *
-        256
-      );
-    };
-    const px = toX(center.lng) + (relX - w / 2);
-    const py = toY(center.lat) + (relY - h / 2);
-
-    const newLng = (px / (scale * 256)) * 360 - 180;
-    const n = Math.PI - (2 * Math.PI * py) / (scale * 256);
-    const newLat =
-      (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
-
-    setPin({ lat: newLat, lng: newLng });
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "Enter" || e.key === " ") {
-      // Fallback: pin center of map on keyboard activation
-      setPin({ lat: center.lat, lng: center.lng });
-    }
-  };
-
   if (!open) return null;
-
-  const iframeSrc = `https://www.openstreetmap.org/export/embed.html?bbox=${center.lng - 0.01},${center.lat - 0.008},${center.lng + 0.01},${center.lat + 0.008}&layer=mapnik`;
-
-  const pinPos = pin
-    ? latLngToPixel(
-        pin.lat,
-        pin.lng,
-        center.lat,
-        center.lng,
-        ZOOM,
-        dims.w,
-        dims.h,
-      )
-    : null;
 
   return (
     <div
@@ -132,9 +131,10 @@ export default function MapPickerModal({
       style={{ background: "rgba(0,0,0,0.65)" }}
     >
       <div
-        className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-lg"
-        style={{ maxHeight: "90vh", display: "flex", flexDirection: "column" }}
+        className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-lg flex flex-col"
+        style={{ maxHeight: "92vh" }}
       >
+        {/* Header */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2 flex-shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
@@ -145,7 +145,7 @@ export default function MapPickerModal({
                 Pin Delivery Location
               </h2>
               <p className="text-xs text-gray-500">
-                Tap anywhere on the map to drop a pin
+                Tap anywhere on the map to drop a pin. Drag pin to adjust.
               </p>
             </div>
           </div>
@@ -158,46 +158,23 @@ export default function MapPickerModal({
           </button>
         </div>
 
+        {/* Map Container */}
         <div
-          ref={containerRef}
-          className="flex-1 mx-3 mb-3 rounded-xl overflow-hidden relative"
-          style={{ minHeight: 300, height: 360 }}
+          className="mx-3 rounded-xl overflow-hidden flex-shrink-0"
+          style={{
+            height: "min(60vh, 420px)",
+            minHeight: 300,
+            position: "relative",
+          }}
         >
-          <iframe
-            title="Delivery area map"
-            src={iframeSrc}
-            style={{
-              width: "100%",
-              height: "100%",
-              border: "none",
-              pointerEvents: "none",
-            }}
-          />
-          {/* biome-ignore lint/a11y/useKeyWithClickEvents: map click handler, keyboard fallback via onKeyDown */}
           <div
-            role="button"
-            tabIndex={0}
-            aria-label="Tap map to drop a pin"
-            className="absolute inset-0 cursor-crosshair"
-            onClick={handleMapClick}
-            onKeyDown={handleKeyDown}
-            style={{ zIndex: 10 }}
+            ref={mapContainerRef}
+            style={{ width: "100%", height: "100%" }}
           />
-          {pin && pinPos && (
-            <div
-              className="absolute pointer-events-none"
-              style={{
-                left: pinPos.x - 12,
-                top: pinPos.y - 28,
-                zIndex: 20,
-              }}
-            >
-              <MapPin className="w-6 h-6 text-red-500 drop-shadow-md" />
-            </div>
-          )}
         </div>
 
-        <div className="px-4 pb-4 flex-shrink-0 space-y-2">
+        {/* Footer */}
+        <div className="px-4 py-3 flex-shrink-0 space-y-2">
           {pin ? (
             <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
               <MapPin className="w-4 h-4 text-green-600 flex-shrink-0" />

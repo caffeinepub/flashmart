@@ -10,13 +10,12 @@ import {
   User,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import ConfirmModal from "../components/ConfirmModal";
 import MapPickerModal from "../components/MapPickerModal";
 import { useApp } from "../context/AppContext";
 import { useCart } from "../context/CartContext";
-import { useLocation } from "../hooks/useLocation";
 import { useCreateOrder } from "../hooks/useQueries";
 
 interface CustomerDetails {
@@ -25,12 +24,43 @@ interface CustomerDetails {
   address: string;
 }
 
+// Delivery zone polygon
+const DELIVERY_ZONE = [
+  { lat: 17.3448, lng: 78.5458 },
+  { lat: 17.3462, lng: 78.5595 },
+  { lat: 17.3368, lng: 78.5708 },
+  { lat: 17.332, lng: 78.5602 },
+  { lat: 17.3365, lng: 78.5472 },
+];
+
+/**
+ * Ray-casting point-in-polygon algorithm.
+ * Polygon is automatically closed.
+ */
+function isPointInPolygon(
+  lat: number,
+  lng: number,
+  polygon: { lat: number; lng: number }[],
+): boolean {
+  let inside = false;
+  const n = polygon.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = polygon[i].lng;
+    const yi = polygon[i].lat;
+    const xj = polygon[j].lng;
+    const yj = polygon[j].lat;
+    const intersect =
+      yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
 export default function CartPage() {
   const { items, increaseQty, decreaseQty, removeItem, clearCart, totalPrice } =
     useCart();
   const { navigate } = useApp();
   const createOrder = useCreateOrder();
-  const { status } = useLocation();
   const [confirmModal, setConfirmModal] = useState<{
     open: boolean;
     message: string;
@@ -54,6 +84,19 @@ export default function CartPage() {
     Partial<CustomerDetails & { pin: string }>
   >({});
 
+  // Check pinned location against delivery zone (ISSUE 3 FIX)
+  const zoneStatus = useMemo(() => {
+    if (!pinnedLocation) return "no_pin";
+    const inside = isPointInPolygon(
+      pinnedLocation.lat,
+      pinnedLocation.lng,
+      DELIVERY_ZONE,
+    );
+    return inside ? "in_range" : "out_of_range";
+  }, [pinnedLocation]);
+
+  const canOrder = zoneStatus === "in_range";
+
   const handleFieldChange = (field: keyof CustomerDetails, value: string) => {
     setCustomer((prev) => ({ ...prev, [field]: value }));
     if (formErrors[field]) {
@@ -76,14 +119,23 @@ export default function CartPage() {
     setPinnedLocation({ lat, lng });
     setMapOpen(false);
     setFormErrors((prev) => ({ ...prev, pin: undefined }));
-    toast.success("Location pinned successfully!");
+    // Notify user about zone status after pinning
+    const inside = isPointInPolygon(lat, lng, DELIVERY_ZONE);
+    if (inside) {
+      toast.success("Location pinned! Delivery available ✅");
+    } else {
+      toast.error("Location outside delivery zone ❌");
+    }
   };
 
   const handlePlaceOrder = () => {
     if (items.length === 0) return;
-    if (status !== "in_range") return;
     if (!validateForm()) {
       toast.error("Please fill in all details and pin your location.");
+      return;
+    }
+    if (!canOrder) {
+      toast.error("Your pinned location is outside the delivery zone.");
       return;
     }
     const summary = items.map((i) => `${i.name} x${i.quantity}`).join(", ");
@@ -113,69 +165,42 @@ export default function CartPage() {
     });
   };
 
-  const locationBanner = () => {
-    if (status === "in_range") {
+  const zoneBanner = () => {
+    if (zoneStatus === "in_range") {
       return (
-        <div className="mb-3" data-ocid="cart.location_indicator">
-          <div className="flex items-center gap-1.5 text-green-600 font-semibold text-sm">
-            <MapPin className="w-4 h-4" />✅ Inside Delivery Zone
+        <div className="mb-3">
+          <div className="flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+            <MapPin className="w-4 h-4 text-green-600" />
+            <span className="text-sm font-semibold text-green-700">
+              ✅ Delivery Available — Inside Delivery Zone
+            </span>
           </div>
-          <p className="text-xs text-green-600 mt-0.5 pl-5">
-            You are inside the delivery zone. You can place your order.
-          </p>
         </div>
       );
     }
-    if (status === "out_of_range") {
+    if (zoneStatus === "out_of_range") {
       return (
-        <div className="mb-3" data-ocid="cart.location_indicator">
-          <div className="flex items-center gap-1.5 text-red-500 font-semibold text-sm">
-            <MapPin className="w-4 h-4" />❌ Outside Delivery Zone
-          </div>
-          <p className="text-xs text-red-500 mt-0.5 pl-5">
-            Your location is outside our delivery zone. Orders are not available
-            here.
-          </p>
-        </div>
-      );
-    }
-    if (status === "denied") {
-      return (
-        <div className="mb-3" data-ocid="cart.location_indicator">
-          <div className="flex items-center gap-1.5 text-red-500 font-semibold text-sm">
-            <MapPin className="w-4 h-4" />
-            Location: Not Enabled
-          </div>
-          <p className="text-xs text-red-500 mt-0.5 pl-5">
-            Go back to dashboard to enable location
-          </p>
-        </div>
-      );
-    }
-    if (status === "requesting") {
-      return (
-        <div className="mb-3" data-ocid="cart.location_indicator">
-          <div className="flex items-center gap-1.5 text-gray-500 font-semibold text-sm">
-            <MapPin className="w-4 h-4" />
-            Location: Checking...
+        <div className="mb-3">
+          <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <MapPin className="w-4 h-4 text-red-500" />
+            <span className="text-sm font-semibold text-red-600">
+              ❌ Outside delivery zone — change pin location
+            </span>
           </div>
         </div>
       );
     }
     return (
-      <div className="mb-3" data-ocid="cart.location_indicator">
-        <div className="flex items-center gap-1.5 text-gray-500 font-semibold text-sm">
-          <MapPin className="w-4 h-4" />
-          Location not enabled
+      <div className="mb-3">
+        <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+          <MapPin className="w-4 h-4 text-gray-400" />
+          <span className="text-sm font-medium text-gray-500">
+            Pin your delivery location to check availability
+          </span>
         </div>
-        <p className="text-xs text-gray-500 mt-0.5 pl-5">
-          Go back to dashboard to enable location before placing order
-        </p>
       </div>
     );
   };
-
-  const canOrder = status === "in_range";
 
   return (
     <div className="max-w-lg mx-auto px-4 py-8">
@@ -401,11 +426,11 @@ export default function CartPage() {
                     <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
                       <MapPin className="w-4 h-4 text-green-600 flex-shrink-0" />
                       <span className="text-xs text-green-700 font-semibold">
-                        Selected Location: {pinnedLocation.lat.toFixed(5)},{" "}
+                        Selected: {pinnedLocation.lat.toFixed(5)},{" "}
                         {pinnedLocation.lng.toFixed(5)}
                       </span>
                     </div>
-                    {/* Mini map preview iframe */}
+                    {/* Mini map preview */}
                     <div
                       className="rounded-lg overflow-hidden border border-gray-200"
                       style={{ height: 140 }}
@@ -446,8 +471,8 @@ export default function CartPage() {
             </div>
           </div>
 
-          {/* Location Banner */}
-          {locationBanner()}
+          {/* Zone Banner */}
+          {zoneBanner()}
 
           <Button
             onClick={handlePlaceOrder}
