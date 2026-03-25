@@ -4,7 +4,6 @@ import PasswordModal, { type DashboardRole } from "./PasswordModal";
 const ACCESS_KEYS: Record<DashboardRole, string> = {
   vendor: "vendorAccess",
   delivery: "deliveryAccess",
-  admin: "adminAccess",
 };
 
 function isAccessValid(key: string): boolean {

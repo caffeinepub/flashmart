@@ -27,8 +27,6 @@ function roleToScreen(role: UserRole) {
       return "vendor-dashboard" as const;
     case UserRole.deliveryP:
       return "delivery-dashboard" as const;
-    case UserRole.admin:
-      return "admin-panel" as const;
     default:
       return "customer-dashboard" as const;
   }

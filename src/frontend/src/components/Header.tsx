@@ -3,7 +3,6 @@ import { Menu, X, Zap } from "lucide-react";
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
-import { useIsCallerAdmin } from "../hooks/useQueries";
 
 interface HeaderProps {
   onLogout: () => void;
@@ -13,7 +12,6 @@ export default function Header({ onLogout }: HeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { identity, login, isLoggingIn } = useInternetIdentity();
   const { navigate, currentUser, screen } = useApp();
-  const { data: isAdmin } = useIsCallerAdmin();
   const isAuthenticated = !!identity;
 
   const navLinks = [
@@ -71,20 +69,6 @@ export default function Header({ onLogout }: HeaderProps) {
                 {link.label}
               </button>
             ))}
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => navigate("admin-panel")}
-                className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${
-                  screen === "admin-panel"
-                    ? "text-primary bg-accent"
-                    : "text-foreground/80 hover:text-foreground hover:bg-muted"
-                }`}
-                data-ocid="nav.admin.link"
-              >
-                Admin
-              </button>
-            )}
           </nav>
 
           {/* CTA / Auth */}
@@ -149,19 +133,6 @@ export default function Header({ onLogout }: HeaderProps) {
               {link.label}
             </button>
           ))}
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={() => {
-                navigate("admin-panel");
-                setMobileMenuOpen(false);
-              }}
-              className="block w-full text-left px-3 py-2 text-sm font-semibold text-foreground/80 hover:text-foreground hover:bg-muted rounded-md"
-              data-ocid="nav.mobile.admin.link"
-            >
-              Admin
-            </button>
-          )}
         </div>
       )}
     </header>

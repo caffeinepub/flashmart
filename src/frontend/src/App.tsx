@@ -11,7 +11,6 @@ import { useCallerProfile } from "./hooks/useQueries";
 import Footer from "./components/Footer";
 import Header from "./components/Header";
 import ProtectedRoute from "./components/ProtectedRoute";
-import AdminPanel from "./pages/AdminPanel";
 import CartPage from "./pages/CartPage";
 import CustomerDashboard from "./pages/CustomerDashboard";
 import DeliveryDashboard from "./pages/DeliveryDashboard";
@@ -30,7 +29,6 @@ const DASHBOARD_SCREENS: AppScreen[] = [
   "customer-dashboard",
   "vendor-dashboard",
   "delivery-dashboard",
-  "admin-panel",
   "cart",
 ];
 
@@ -42,8 +40,6 @@ function roleToScreen(role: UserRole): AppScreen {
       return "vendor-dashboard";
     case UserRole.deliveryP:
       return "delivery-dashboard";
-    case UserRole.admin:
-      return "admin-panel";
     default:
       return "customer-dashboard";
   }
@@ -132,15 +128,6 @@ function AppContent() {
             onCancel={() => navigate("landing")}
           >
             <DeliveryDashboard />
-          </ProtectedRoute>
-        );
-      case "admin-panel":
-        return (
-          <ProtectedRoute
-            dashboardRole="admin"
-            onCancel={() => navigate("landing")}
-          >
-            <AdminPanel />
           </ProtectedRoute>
         );
       default:

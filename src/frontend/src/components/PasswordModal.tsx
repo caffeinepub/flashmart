@@ -4,18 +4,16 @@ import { Eye, EyeOff, Lock } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 
-export type DashboardRole = "vendor" | "delivery" | "admin";
+export type DashboardRole = "vendor" | "delivery";
 
 const PASSWORDS: Record<DashboardRole, string> = {
   vendor: "FLASHMART2026V",
   delivery: "FLASHMART2026D",
-  admin: "FLASHMART007",
 };
 
 const ROLE_LABELS: Record<DashboardRole, string> = {
   vendor: "Vendor Dashboard",
   delivery: "Delivery Dashboard",
-  admin: "Admin Panel",
 };
 
 interface PasswordModalProps {
