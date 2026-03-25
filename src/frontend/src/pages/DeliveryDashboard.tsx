@@ -7,8 +7,10 @@ import {
   LogOut,
   MapPin,
   Package,
+  Phone,
   RefreshCw,
   Truck,
+  User,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
@@ -17,6 +19,66 @@ import { type Order, OrderStatus } from "../backend";
 import ConfirmModal from "../components/ConfirmModal";
 import { useApp } from "../context/AppContext";
 import { useOrdersByStatus, useUpdateOrderStatus } from "../hooks/useQueries";
+
+interface ParsedOrderData {
+  customerName: string | null;
+  customerPhone: string | null;
+  customerAddress: string | null;
+  items: string;
+}
+
+function parseOrderData(itemName: string): ParsedOrderData {
+  try {
+    const parsed = JSON.parse(itemName);
+    if (parsed && typeof parsed === "object" && "items" in parsed) {
+      return {
+        customerName: parsed.customerName || null,
+        customerPhone: parsed.customerPhone || null,
+        customerAddress: parsed.customerAddress || null,
+        items: parsed.items || itemName,
+      };
+    }
+  } catch {
+    // not JSON
+  }
+  return {
+    customerName: null,
+    customerPhone: null,
+    customerAddress: null,
+    items: itemName,
+  };
+}
+
+function CustomerInfo({ data }: { data: ParsedOrderData }) {
+  if (!data.customerName && !data.customerPhone && !data.customerAddress)
+    return null;
+  return (
+    <div className="mt-2 mb-3 bg-muted/60 rounded-lg px-3 py-2 space-y-1">
+      {data.customerName && (
+        <div className="flex items-center gap-1.5 text-xs text-foreground">
+          <User className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+          <span className="font-medium">{data.customerName}</span>
+        </div>
+      )}
+      {data.customerPhone && (
+        <a
+          href={`tel:${data.customerPhone}`}
+          className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium"
+          data-ocid="delivery.call.link"
+        >
+          <Phone className="w-3 h-3 flex-shrink-0" />
+          {data.customerPhone}
+        </a>
+      )}
+      {data.customerAddress && (
+        <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+          <MapPin className="w-3 h-3 flex-shrink-0 mt-0.5 text-muted-foreground" />
+          <span>{data.customerAddress}</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function DeliveryDashboard() {
   const { currentUser, navigate } = useApp();
@@ -55,13 +117,14 @@ export default function DeliveryDashboard() {
   };
 
   const handleAcceptDelivery = (order: Order) => {
-    openConfirm(`Accept delivery for "${order.itemName}"?`, async () => {
+    const { items } = parseOrderData(order.itemName);
+    openConfirm(`Accept delivery for "${items}"?`, async () => {
       try {
         await updateStatus.mutateAsync({
           orderId: order.id,
           status: OrderStatus.riderAssigned,
         });
-        toast.success(`Delivery accepted for "${order.itemName}"!`);
+        toast.success("Delivery accepted!");
       } catch (e: any) {
         toast.error(e?.message || "Failed.");
       }
@@ -69,7 +132,8 @@ export default function DeliveryDashboard() {
   };
 
   const handleMarkPickedUp = (order: Order) => {
-    openConfirm(`Mark "${order.itemName}" as picked up?`, async () => {
+    const { items } = parseOrderData(order.itemName);
+    openConfirm(`Mark "${items}" as picked up?`, async () => {
       try {
         await updateStatus.mutateAsync({
           orderId: order.id,
@@ -83,7 +147,8 @@ export default function DeliveryDashboard() {
   };
 
   const handleMarkDelivered = (order: Order) => {
-    openConfirm(`Mark "${order.itemName}" as delivered?`, async () => {
+    const { items } = parseOrderData(order.itemName);
+    openConfirm(`Mark "${items}" as delivered?`, async () => {
       try {
         await updateStatus.mutateAsync({
           orderId: order.id,
@@ -160,49 +225,53 @@ export default function DeliveryDashboard() {
           </div>
         ) : (
           <div className="space-y-3">
-            {confirmedOrders.map((order, i) => (
-              <motion.div
-                key={order.id.toString()}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.05 * i }}
-                data-ocid={`delivery.available.item.${i + 1}`}
-              >
-                <Card className="shadow-card border-border">
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3 mb-3">
-                      <div className="w-9 h-9 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <Package className="w-4 h-4 text-blue-600" />
+            {confirmedOrders.map((order, i) => {
+              const parsed = parseOrderData(order.itemName);
+              return (
+                <motion.div
+                  key={order.id.toString()}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.05 * i }}
+                  data-ocid={`delivery.available.item.${i + 1}`}
+                >
+                  <Card className="shadow-card border-border">
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-9 h-9 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <Package className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-semibold text-sm text-foreground">
+                            Items: {parsed.items}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Order #{order.id.toString()}
+                          </p>
+                          <Badge
+                            variant="outline"
+                            className="mt-1.5 text-xs bg-blue-50 text-blue-700 border-blue-200"
+                          >
+                            Store Confirmed
+                          </Badge>
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <p className="font-semibold text-sm text-foreground">
-                          {order.itemName}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Order #{order.id.toString()}
-                        </p>
-                        <Badge
-                          variant="outline"
-                          className="mt-1.5 text-xs bg-blue-50 text-blue-700 border-blue-200"
-                        >
-                          Store Confirmed
-                        </Badge>
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={() => handleAcceptDelivery(order)}
-                      disabled={updateStatus.isPending}
-                      className="w-full bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 text-xs"
-                      data-ocid={`delivery.accept.button.${i + 1}`}
-                    >
-                      <Truck className="w-3.5 h-3.5" />
-                      Accept Delivery
-                    </Button>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
+                      <CustomerInfo data={parsed} />
+                      <Button
+                        size="sm"
+                        onClick={() => handleAcceptDelivery(order)}
+                        disabled={updateStatus.isPending}
+                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 text-xs"
+                        data-ocid={`delivery.accept.button.${i + 1}`}
+                      >
+                        <Truck className="w-3.5 h-3.5" />
+                        Accept Delivery
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -215,39 +284,43 @@ export default function DeliveryDashboard() {
             Assigned — Navigate to Store ({assignedOrders.length})
           </h2>
           <div className="space-y-3">
-            {assignedOrders.map((order, i) => (
-              <Card
-                key={order.id.toString()}
-                className="shadow-card border-purple-200"
-                data-ocid={`delivery.assigned.item.${i + 1}`}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className="w-9 h-9 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Truck className="w-4 h-4 text-purple-600" />
+            {assignedOrders.map((order, i) => {
+              const parsed = parseOrderData(order.itemName);
+              return (
+                <Card
+                  key={order.id.toString()}
+                  className="shadow-card border-purple-200"
+                  data-ocid={`delivery.assigned.item.${i + 1}`}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Truck className="w-4 h-4 text-purple-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-sm text-foreground">
+                          Items: {parsed.items}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Order #{order.id.toString()}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-sm text-foreground">
-                        {order.itemName}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Order #{order.id.toString()}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    onClick={() => handleMarkPickedUp(order)}
-                    disabled={updateStatus.isPending}
-                    className="w-full bg-purple-600 hover:bg-purple-700 text-white gap-1.5 text-xs"
-                    data-ocid={`delivery.pickup.button.${i + 1}`}
-                  >
-                    <Package className="w-3.5 h-3.5" />
-                    Mark as Picked Up
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+                    <CustomerInfo data={parsed} />
+                    <Button
+                      size="sm"
+                      onClick={() => handleMarkPickedUp(order)}
+                      disabled={updateStatus.isPending}
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white gap-1.5 text-xs"
+                      data-ocid={`delivery.pickup.button.${i + 1}`}
+                    >
+                      <Package className="w-3.5 h-3.5" />
+                      Mark as Picked Up
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       )}
@@ -260,39 +333,43 @@ export default function DeliveryDashboard() {
             En Route — Deliver Now ({pickedOrders.length})
           </h2>
           <div className="space-y-3">
-            {pickedOrders.map((order, i) => (
-              <Card
-                key={order.id.toString()}
-                className="shadow-card border-orange-200"
-                data-ocid={`delivery.enroute.item.${i + 1}`}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className="w-9 h-9 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Package className="w-4 h-4 text-orange-600" />
+            {pickedOrders.map((order, i) => {
+              const parsed = parseOrderData(order.itemName);
+              return (
+                <Card
+                  key={order.id.toString()}
+                  className="shadow-card border-orange-200"
+                  data-ocid={`delivery.enroute.item.${i + 1}`}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Package className="w-4 h-4 text-orange-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-sm text-foreground">
+                          Items: {parsed.items}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Order #{order.id.toString()}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-sm text-foreground">
-                        {order.itemName}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Order #{order.id.toString()}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    onClick={() => handleMarkDelivered(order)}
-                    disabled={updateStatus.isPending}
-                    className="w-full bg-orange-600 hover:bg-orange-700 text-white gap-1.5 text-xs"
-                    data-ocid={`delivery.delivered.button.${i + 1}`}
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Mark as Delivered
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+                    <CustomerInfo data={parsed} />
+                    <Button
+                      size="sm"
+                      onClick={() => handleMarkDelivered(order)}
+                      disabled={updateStatus.isPending}
+                      className="w-full bg-orange-600 hover:bg-orange-700 text-white gap-1.5 text-xs"
+                      data-ocid={`delivery.delivered.button.${i + 1}`}
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Mark as Delivered
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       )}

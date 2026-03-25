@@ -1,12 +1,15 @@
 import { useState } from "react";
-import PasswordModal from "./PasswordModal";
-
-type DashboardRole = "vendor" | "delivery";
+import PasswordModal, { type DashboardRole } from "./PasswordModal";
 
 const ACCESS_KEYS: Record<DashboardRole, string> = {
   vendor: "vendorAccess",
   delivery: "deliveryAccess",
+  admin: "adminAccess",
 };
+
+function isAccessValid(key: string): boolean {
+  return localStorage.getItem(key) === "true";
+}
 
 interface ProtectedRouteProps {
   dashboardRole: DashboardRole;
@@ -20,9 +23,7 @@ export default function ProtectedRoute({
   children,
 }: ProtectedRouteProps) {
   const key = ACCESS_KEYS[dashboardRole];
-  const [hasAccess, setHasAccess] = useState(
-    () => localStorage.getItem(key) === "true",
-  );
+  const [hasAccess, setHasAccess] = useState(() => isAccessValid(key));
 
   const handleSuccess = () => {
     localStorage.setItem(key, "true");

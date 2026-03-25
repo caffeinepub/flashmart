@@ -135,7 +135,14 @@ function AppContent() {
           </ProtectedRoute>
         );
       case "admin-panel":
-        return <AdminPanel />;
+        return (
+          <ProtectedRoute
+            dashboardRole="admin"
+            onCancel={() => navigate("landing")}
+          >
+            <AdminPanel />
+          </ProtectedRoute>
+        );
       default:
         return <LandingPage />;
     }
