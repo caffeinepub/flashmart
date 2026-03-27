@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Bell,
   CheckCircle2,
   Edit2,
   ImageIcon,
@@ -17,8 +18,8 @@ import {
   X,
   XCircle,
 } from "lucide-react";
-import { motion } from "motion/react";
-import { useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type Order, OrderStatus, type Product } from "../backend";
 import ConfirmModal from "../components/ConfirmModal";
@@ -212,7 +213,6 @@ function ManageProductsSection({
   vendorId: string;
   onConfirm: (message: string, action: () => void) => void;
 }) {
-  // If vendorId is "anonymous" or falsy, show all products instead
   const isAnonymous = !vendorId || vendorId === "anonymous";
   const vendorQuery = useVendorProducts(isAnonymous ? undefined : vendorId);
   const allQuery = useAllProducts();
@@ -469,6 +469,68 @@ export default function VendorDashboard() {
     action: (() => void) | null;
   }>({ open: false, message: "", action: null });
 
+  // ── Sound + notification state ──────────────────────────────────────────
+  const orderSound = useRef(
+    new Audio("https://www.soundjay.com/buttons/sounds/button-3.mp3"),
+  );
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [showNewOrderPopup, setShowNewOrderPopup] = useState(false);
+  const prevOrderCount = useRef(-1);
+
+  // Unlock audio on first user click
+  useEffect(() => {
+    const unlock = () => {
+      orderSound.current
+        .play()
+        .then(() => {
+          orderSound.current.pause();
+          orderSound.current.currentTime = 0;
+          setAudioUnlocked(true);
+        })
+        .catch(() => {
+          setAudioUnlocked(true);
+        });
+    };
+    document.addEventListener("click", unlock, { once: true });
+    return () => document.removeEventListener("click", unlock);
+  }, []);
+
+  const visibleRequested = requestedOrders.filter(
+    (o) => !declining.has(o.id.toString()),
+  );
+
+  // Detect new orders
+  useEffect(() => {
+    const count = visibleRequested.length;
+    if (prevOrderCount.current === -1) {
+      prevOrderCount.current = count;
+      return;
+    }
+    if (count > prevOrderCount.current) {
+      if (audioUnlocked) {
+        orderSound.current.currentTime = 0;
+        orderSound.current.play().catch(() => {});
+      }
+      if (navigator.vibrate) {
+        navigator.vibrate([200, 100, 200]);
+      }
+      setShowNewOrderPopup(true);
+      setTimeout(() => setShowNewOrderPopup(false), 4000);
+    }
+    prevOrderCount.current = count;
+  }, [visibleRequested.length, audioUnlocked]);
+
+  // Repeat sound every 5s while pending orders exist
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (visibleRequested.length > 0 && audioUnlocked) {
+        orderSound.current.currentTime = 0;
+        orderSound.current.play().catch(() => {});
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [visibleRequested.length, audioUnlocked]);
+
   const handleAccept = (order: Order) => {
     setConfirmModal({
       open: true,
@@ -510,11 +572,6 @@ export default function VendorDashboard() {
     navigate("landing");
   };
 
-  const visibleRequested = requestedOrders.filter(
-    (o) => !declining.has(o.id.toString()),
-  );
-
-  // Always show Manage Products — dashboard is already password-protected
   const vendorId = currentUser?.id?.toString() || "anonymous";
 
   return (
@@ -525,6 +582,40 @@ export default function VendorDashboard() {
         onConfirm={handleConfirm}
         onCancel={handleCancel}
       />
+
+      {/* New Order Popup */}
+      <AnimatePresence>
+        {showNewOrderPopup && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-sm"
+            data-ocid="vendor.toast"
+          >
+            <div className="bg-green-500 text-white rounded-2xl shadow-2xl px-4 py-3 flex items-center gap-3">
+              <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+                <Bell className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <p className="font-bold text-sm">New Order Received!</p>
+                <p className="text-xs text-green-100">
+                  Check incoming requests below
+                </p>
+              </div>
+              <button
+                onClick={() => setShowNewOrderPopup(false)}
+                className="w-7 h-7 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
+                type="button"
+                data-ocid="vendor.close_button"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="mb-6 flex items-start justify-between">
         <div>
@@ -559,7 +650,7 @@ export default function VendorDashboard() {
         </div>
       </div>
 
-      {/* ── Manage Products (always visible — dashboard is password-protected) ── */}
+      {/* ── Manage Products ── */}
       <ManageProductsSection
         vendorId={vendorId}
         onConfirm={handleOpenConfirm}
@@ -569,7 +660,13 @@ export default function VendorDashboard() {
       <div className="mb-8">
         <h2 className="text-base font-semibold text-foreground mb-3 flex items-center gap-2">
           <Package className="w-4 h-4 text-primary" />
-          Incoming Requests ({visibleRequested.length})
+          Incoming Requests
+          <span className="text-sm font-normal text-muted-foreground">
+            ({visibleRequested.length})
+          </span>
+          {visibleRequested.length > 0 && (
+            <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+          )}
         </h2>
 
         {isLoading ? (
