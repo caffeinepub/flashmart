@@ -153,7 +153,27 @@ export default function CartPage() {
             pinnedLongitude: pinnedLocation!.lng,
             items: summary,
           });
-          await createOrder.mutateAsync(orderPayload);
+          const newOrderId = await createOrder.mutateAsync(orderPayload);
+          // Store createdAt timestamp for expiry logic
+          try {
+            const timestamps: Record<string, number> = JSON.parse(
+              localStorage.getItem("flashmart_order_timestamps") || "{}",
+            );
+            timestamps[newOrderId.toString()] = Date.now();
+            localStorage.setItem(
+              "flashmart_order_timestamps",
+              JSON.stringify(timestamps),
+            );
+            // Store items for reorder
+            const orderItems: Record<string, string> = JSON.parse(
+              localStorage.getItem("flashmart_order_items") || "{}",
+            );
+            orderItems[newOrderId.toString()] = summary;
+            localStorage.setItem(
+              "flashmart_order_items",
+              JSON.stringify(orderItems),
+            );
+          } catch {}
           clearCart();
           toast.success("Order placed successfully!");
           navigate("customer-dashboard");

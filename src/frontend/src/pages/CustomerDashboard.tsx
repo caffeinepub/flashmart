@@ -4,11 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  AlertCircle,
   CheckCircle2,
   Clock,
   Loader2,
   MapPin,
   Package,
+  RefreshCw,
   ShoppingBag,
   ShoppingCart,
   Truck,
@@ -129,9 +131,43 @@ function ProductCard({
   );
 }
 
-function OrderCard({ order, idx }: { order: Order; idx: number }) {
+function OrderCard({
+  order,
+  idx,
+  isExpired,
+}: { order: Order; idx: number; isExpired?: boolean }) {
   const cfg = statusConfig[order.status];
   const Icon = cfg.icon;
+
+  if (isExpired) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ delay: 0.05 * idx }}
+        className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl shadow-sm opacity-75"
+        data-ocid={`orders.item.${idx + 1}`}
+      >
+        <div className="w-9 h-9 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+          <AlertCircle className="w-4 h-4 text-red-500" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-sm text-gray-700 truncate line-through">
+            {order.itemName}
+          </p>
+        </div>
+        <Badge
+          variant="outline"
+          className="text-xs flex-shrink-0 gap-1 font-semibold bg-red-100 text-red-700 border-red-300"
+        >
+          <AlertCircle className="w-3 h-3" />
+          Order Expired
+        </Badge>
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -180,6 +216,65 @@ export default function CustomerDashboard() {
   }>({ open: false, message: "", action: null });
 
   const orderFormRef = useRef<HTMLDivElement>(null);
+
+  // ── Order Expiry Logic ─────────────────────────────────────────────────
+  const [expiredOrderIds, setExpiredOrderIds] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem("flashmart_expired_orders");
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+  const [expiredNotification, setExpiredNotification] = useState<{
+    orderId: string;
+    itemName: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setExpiredOrderIds((prev) => {
+        const next = new Set(prev);
+        let changed = false;
+        for (const order of orders) {
+          const idStr = order.id.toString();
+          if (
+            order.status === "requested" &&
+            !next.has(idStr) &&
+            (() => {
+              try {
+                const ts: Record<string, number> = JSON.parse(
+                  localStorage.getItem("flashmart_order_timestamps") || "{}",
+                );
+                const createdAt = ts[idStr];
+                return createdAt
+                  ? Date.now() - createdAt > 5 * 60 * 1000
+                  : false;
+              } catch {
+                return false;
+              }
+            })()
+          ) {
+            next.add(idStr);
+            changed = true;
+            setExpiredNotification({
+              orderId: idStr,
+              itemName: order.itemName,
+            });
+          }
+        }
+        if (changed) {
+          localStorage.setItem(
+            "flashmart_expired_orders",
+            JSON.stringify([...next]),
+          );
+          return next;
+        }
+        return prev;
+      });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [orders]);
 
   useEffect(() => {
     if (status === "out_of_range") {
@@ -233,7 +328,14 @@ export default function CustomerDashboard() {
     setConfirmModal({ open: false, message: "", action: null });
   };
 
-  const activeOrders = orders.filter((o) => o.status !== OrderStatus.delivered);
+  const activeOrders = orders.filter(
+    (o) =>
+      o.status !== OrderStatus.delivered &&
+      !expiredOrderIds.has(o.id.toString()),
+  );
+  const expiredOrders = orders.filter(
+    (o) => o.status === "requested" && expiredOrderIds.has(o.id.toString()),
+  );
   const completedOrders = orders.filter(
     (o) => o.status === OrderStatus.delivered,
   );
@@ -359,6 +461,66 @@ export default function CustomerDashboard() {
         onConfirm={handleConfirm}
         onCancel={handleCancel}
       />
+
+      {/* Expired Order Notification Banner */}
+      <AnimatePresence>
+        {expiredNotification && (
+          <motion.div
+            initial={{ opacity: 0, y: -16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -16 }}
+            className="fixed top-4 left-0 right-0 mx-4 z-50 max-w-lg mx-auto"
+            style={{
+              maxWidth: "32rem",
+              left: "50%",
+              transform: "translateX(-50%)",
+            }}
+          >
+            <div className="bg-red-600 text-white rounded-2xl shadow-xl p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-sm">Order Expired</p>
+                  <p className="text-xs text-red-100 mt-0.5">
+                    No vendor accepted your order. Please try again.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setExpiredNotification(null)}
+                  className="text-red-200 hover:text-white text-lg leading-none flex-shrink-0"
+                  aria-label="Dismiss"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="flex gap-2 mt-3">
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    navigate("cart");
+                    setExpiredNotification(null);
+                  }}
+                  className="bg-white text-red-600 hover:bg-red-50 font-bold text-xs flex-1 gap-1"
+                  data-ocid="expired.reorder.button"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Reorder
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setExpiredNotification(null)}
+                  className="text-red-100 hover:text-white hover:bg-red-700 text-xs"
+                  data-ocid="expired.dismiss.button"
+                >
+                  Dismiss
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Header */}
       <div className="mb-4 flex items-start justify-between">
@@ -556,11 +718,39 @@ export default function CustomerDashboard() {
         ) : (
           <div className="space-y-2">
             {activeOrders.map((o, i) => (
-              <OrderCard key={o.id.toString()} order={o} idx={i} />
+              <OrderCard
+                key={o.id.toString()}
+                order={o}
+                idx={i}
+                isExpired={expiredOrderIds.has(o.id.toString())}
+              />
             ))}
           </div>
         )}
       </div>
+
+      {/* Expired Orders */}
+      {expiredOrders.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-base font-bold text-red-600 mb-3 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" />
+            Expired Orders ({expiredOrders.length})
+          </h2>
+          <div className="space-y-2">
+            {expiredOrders.map((o, i) => (
+              <OrderCard
+                key={o.id.toString()}
+                order={o}
+                idx={i}
+                isExpired={true}
+              />
+            ))}
+          </div>
+          <p className="text-xs text-gray-500 mt-2 text-center">
+            No vendor accepted these orders in time.
+          </p>
+        </div>
+      )}
 
       {/* Completed Orders */}
       {completedOrders.length > 0 && (

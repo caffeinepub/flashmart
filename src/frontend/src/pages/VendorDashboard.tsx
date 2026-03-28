@@ -451,6 +451,19 @@ function ManageProductsSection({
   );
 }
 
+function isOrderExpiredLocally(orderId: string): boolean {
+  try {
+    const timestamps: Record<string, number> = JSON.parse(
+      localStorage.getItem("flashmart_order_timestamps") || "{}",
+    );
+    const createdAt = timestamps[orderId];
+    if (!createdAt) return false;
+    return Date.now() - createdAt > 5 * 60 * 1000;
+  } catch {
+    return false;
+  }
+}
+
 export default function VendorDashboard() {
   const { currentUser, navigate } = useApp();
   const {
@@ -463,6 +476,14 @@ export default function VendorDashboard() {
   );
   const updateStatus = useUpdateOrderStatus();
   const [declining, setDeclining] = useState<Set<string>>(new Set());
+  const [expiredOrderIds, setExpiredOrderIds] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem("flashmart_expired_orders");
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
   const [confirmModal, setConfirmModal] = useState<{
     open: boolean;
     message: string;
@@ -494,6 +515,31 @@ export default function VendorDashboard() {
     document.addEventListener("click", unlock, { once: true });
     return () => document.removeEventListener("click", unlock);
   }, []);
+
+  // Sync expired orders from localStorage every 5s
+  useEffect(() => {
+    const interval = setInterval(() => {
+      try {
+        const stored = localStorage.getItem("flashmart_expired_orders");
+        if (stored) {
+          const ids = new Set<string>(JSON.parse(stored));
+          // also check orders that may have newly expired
+          for (const order of requestedOrders) {
+            const idStr = order.id.toString();
+            if (!ids.has(idStr) && isOrderExpiredLocally(idStr)) {
+              ids.add(idStr);
+              localStorage.setItem(
+                "flashmart_expired_orders",
+                JSON.stringify([...ids]),
+              );
+            }
+          }
+          setExpiredOrderIds(ids);
+        }
+      } catch {}
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [requestedOrders]);
 
   const visibleRequested = requestedOrders.filter(
     (o) => !declining.has(o.id.toString()),
@@ -715,28 +761,37 @@ export default function VendorDashboard() {
                         </Badge>
                       </div>
                     </div>
-                    <div className="flex gap-2 mt-3">
-                      <Button
-                        size="sm"
-                        onClick={() => handleAccept(order)}
-                        disabled={updateStatus.isPending}
-                        className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 text-xs"
-                        data-ocid={`vendor.accept.button.${i + 1}`}
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        Accept
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDecline(order)}
-                        className="flex-1 gap-1.5 text-xs border-destructive/40 text-destructive hover:bg-destructive/5"
-                        data-ocid={`vendor.decline.button.${i + 1}`}
-                      >
-                        <XCircle className="w-3.5 h-3.5" />
-                        Decline
-                      </Button>
-                    </div>
+                    {expiredOrderIds.has(order.id.toString()) ? (
+                      <div className="mt-3 flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                        <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                        <span className="text-xs font-bold text-red-600">
+                          Order Expired — No longer available
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2 mt-3">
+                        <Button
+                          size="sm"
+                          onClick={() => handleAccept(order)}
+                          disabled={updateStatus.isPending}
+                          className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 text-xs"
+                          data-ocid={`vendor.accept.button.${i + 1}`}
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Accept
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDecline(order)}
+                          className="flex-1 gap-1.5 text-xs border-destructive/40 text-destructive hover:bg-destructive/5"
+                          data-ocid={`vendor.decline.button.${i + 1}`}
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          Decline
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </motion.div>
