@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { type Order, OrderStatus, type Product } from "../backend";
 import ConfirmModal from "../components/ConfirmModal";
 import { useApp } from "../context/AppContext";
+import { useNotifications } from "../context/NotificationContext";
 import {
   useAddProduct,
   useAllProducts,
@@ -466,6 +467,7 @@ function isOrderExpiredLocally(orderId: string): boolean {
 
 export default function VendorDashboard() {
   const { currentUser, navigate } = useApp();
+  const { addNotification } = useNotifications();
   const {
     data: requestedOrders = [],
     isLoading,
@@ -562,9 +564,14 @@ export default function VendorDashboard() {
       }
       setShowNewOrderPopup(true);
       setTimeout(() => setShowNewOrderPopup(false), 4000);
+      addNotification({
+        title: "New Order Received 🔥",
+        message: `You have ${count} pending order${count > 1 ? "s" : ""}`,
+        type: "order",
+      });
     }
     prevOrderCount.current = count;
-  }, [visibleRequested.length, audioUnlocked]);
+  }, [visibleRequested.length, audioUnlocked, addNotification]);
 
   // Repeat sound every 5s while pending orders exist
   useEffect(() => {

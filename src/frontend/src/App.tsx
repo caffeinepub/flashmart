@@ -4,6 +4,7 @@ import { useCallback, useEffect } from "react";
 import { UserRole } from "./backend";
 import { AppProvider, type AppScreen, useApp } from "./context/AppContext";
 import { CartProvider } from "./context/CartContext";
+import { NotificationProvider } from "./context/NotificationContext";
 import { useActor } from "./hooks/useActor";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import { useCallerProfile } from "./hooks/useQueries";
@@ -147,10 +148,12 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AppProvider>
-      <CartProvider>
-        <AppContent />
-      </CartProvider>
-    </AppProvider>
+    <NotificationProvider>
+      <AppProvider>
+        <CartProvider>
+          <AppContent />
+        </CartProvider>
+      </AppProvider>
+    </NotificationProvider>
   );
 }

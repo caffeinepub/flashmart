@@ -25,6 +25,7 @@ import OutOfRangeModal from "../components/OutOfRangeModal";
 import SmartSearchBar from "../components/SmartSearchBar";
 import { useApp } from "../context/AppContext";
 import { useCart } from "../context/CartContext";
+import { useNotifications } from "../context/NotificationContext";
 import { useLocation } from "../hooks/useLocation";
 import {
   useAllProducts,
@@ -199,6 +200,7 @@ function OrderCard({
 
 export default function CustomerDashboard() {
   const { currentUser, navigate } = useApp();
+  const { addNotification } = useNotifications();
   const { addItem, totalItems, items } = useCart();
   const customerId = currentUser?.id?.toString();
   const { data: orders = [], isLoading: ordersLoading } =
@@ -207,6 +209,13 @@ export default function CustomerDashboard() {
   const createOrder = useCreateOrder();
   const { status, inZone, requestLocation } = useLocation();
   const [showLocationModal, setShowLocationModal] = useState(false);
+  const [pushDismissed, setPushDismissed] = useState(
+    () =>
+      localStorage.getItem("flashmart_push_dismissed") === "1" ||
+      (typeof window !== "undefined" &&
+        "Notification" in window &&
+        Notification.permission !== "default"),
+  );
   const [showOutOfRange, setShowOutOfRange] = useState(false);
   const [itemName, setItemName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -265,6 +274,11 @@ export default function CustomerDashboard() {
               orderId: idStr,
               itemName: order.itemName,
             });
+            addNotification({
+              title: "Order Expired ⏳",
+              message: `No vendor accepted your order for "${order.itemName}". Tap to reorder.`,
+              type: "order",
+            });
           }
         }
         if (changed) {
@@ -278,13 +292,116 @@ export default function CustomerDashboard() {
       });
     }, 5000);
     return () => clearInterval(interval);
-  }, [orders]);
+  }, [orders, addNotification]);
 
   useEffect(() => {
     if (status === "out_of_range") {
       setShowOutOfRange(true);
     }
   }, [status]);
+
+  // ── Status change notifications ────────────────────────────────────────
+  const prevStatuses = useRef<Map<string, string>>(new Map());
+  useEffect(() => {
+    for (const order of orders) {
+      const id = order.id.toString();
+      const prev = prevStatuses.current.get(id);
+      const curr = order.status as string;
+      if (prev && prev !== curr) {
+        const rawItems = (() => {
+          try {
+            const p = JSON.parse(order.itemName);
+            return p?.items || order.itemName;
+          } catch {
+            return order.itemName;
+          }
+        })();
+        if (curr === OrderStatus.storeConfirmed) {
+          addNotification({
+            title: "Order Accepted ✅",
+            message: `A vendor accepted your order for ${rawItems}!`,
+            type: "order",
+          });
+        } else if (curr === OrderStatus.riderAssigned) {
+          addNotification({
+            title: "Out for Delivery 🚴",
+            message: `Your ${rawItems} is on the way!`,
+            type: "order",
+          });
+        } else if (curr === OrderStatus.delivered) {
+          addNotification({
+            title: "Delivered! 🎉",
+            message: `Your ${rawItems} has been delivered. Enjoy!`,
+            type: "order",
+          });
+        }
+      }
+      prevStatuses.current.set(id, curr);
+    }
+  }, [orders, addNotification]);
+
+  // ── Time-based offer notifications (once per slot per day) ─────────────
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally run once on mount only
+  useEffect(() => {
+    const hour = new Date().getHours();
+    let slot: string | null = null;
+    if (hour >= 6 && hour < 11) slot = "morning";
+    else if (hour >= 11 && hour < 15) slot = "lunch";
+    else if (hour >= 18 && hour < 22) slot = "evening";
+    if (!slot) return;
+    const today = new Date().toDateString();
+    const stored = (() => {
+      try {
+        return JSON.parse(
+          localStorage.getItem("flashmart_last_offer_slot") || "{}",
+        );
+      } catch {
+        return {};
+      }
+    })();
+    if (stored.date === today && stored.slot === slot) return;
+    const offerMap: Record<string, { title: string; message: string }> = {
+      morning: {
+        title: "Good morning! ☀️",
+        message: "Only for you 🎯 — Fresh breakfast deals just dropped",
+      },
+      lunch: {
+        title: "Lunchtime deals 🍱",
+        message: "People near you are ordering lunch right now",
+      },
+      evening: {
+        title: "Evening snacks 🌙",
+        message: "Last chance ⏳ — Today's best deals end at midnight",
+      },
+    };
+    const offer = offerMap[slot];
+    addNotification({
+      title: offer.title,
+      message: offer.message,
+      type: "offer",
+    });
+    localStorage.setItem(
+      "flashmart_last_offer_slot",
+      JSON.stringify({ date: today, slot }),
+    );
+  }, []);
+
+  // ── Cart abandonment reminder (10 min) ────────────────────────────────
+  useEffect(() => {
+    if (items.length === 0) return;
+    const timer = setTimeout(
+      () => {
+        addNotification({
+          title: "You left something behind 👀",
+          message:
+            "Your cart is waiting — complete your order before items run out!",
+          type: "reminder",
+        });
+      },
+      10 * 60 * 1000,
+    );
+    return () => clearTimeout(timer);
+  }, [items.length, addNotification]);
 
   const handleAddToCart = (product: Product) => {
     addItem({
@@ -467,6 +584,46 @@ export default function CustomerDashboard() {
         onConfirm={handleConfirm}
         onCancel={handleCancel}
       />
+
+      {/* Push Notification Permission Banner */}
+      {!pushDismissed &&
+        typeof window !== "undefined" &&
+        "Notification" in window &&
+        Notification.permission === "default" && (
+          <div
+            className="mb-4 flex items-center justify-between gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3"
+            data-ocid="notifications.push_prompt.card"
+          >
+            <p className="text-xs text-blue-800 font-medium flex-1">
+              Enable notifications to get order updates instantly.
+            </p>
+            <button
+              type="button"
+              className="text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
+              data-ocid="notifications.push_enable.button"
+              onClick={() => {
+                Notification.requestPermission().then(() => {
+                  setPushDismissed(true);
+                  localStorage.setItem("flashmart_push_dismissed", "1");
+                });
+              }}
+            >
+              Enable
+            </button>
+            <button
+              type="button"
+              className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 text-lg leading-none"
+              data-ocid="notifications.push_dismiss.button"
+              onClick={() => {
+                setPushDismissed(true);
+                localStorage.setItem("flashmart_push_dismissed", "1");
+              }}
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
       {/* Expired Order Notification Banner */}
       <AnimatePresence>

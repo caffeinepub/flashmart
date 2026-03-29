@@ -3,6 +3,7 @@ import { Menu, X, Zap } from "lucide-react";
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
+import NotificationBell from "./NotificationBell";
 
 interface HeaderProps {
   onLogout: () => void;
@@ -73,6 +74,7 @@ export default function Header({ onLogout }: HeaderProps) {
 
           {/* CTA / Auth */}
           <div className="flex items-center gap-2">
+            <NotificationBell />
             {isAuthenticated ? (
               <div className="flex items-center gap-2">
                 {currentUser && (

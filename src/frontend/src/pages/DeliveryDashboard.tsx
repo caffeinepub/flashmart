@@ -14,11 +14,12 @@ import {
   User,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type Order, OrderStatus } from "../backend";
 import ConfirmModal from "../components/ConfirmModal";
 import { useApp } from "../context/AppContext";
+import { useNotifications } from "../context/NotificationContext";
 import { useOrdersByStatus, useUpdateOrderStatus } from "../hooks/useQueries";
 
 interface ParsedOrderData {
@@ -159,6 +160,8 @@ function CustomerInfo({ data }: { data: ParsedOrderData }) {
 
 export default function DeliveryDashboard() {
   const { currentUser, navigate } = useApp();
+  const { addNotification } = useNotifications();
+  const prevAssignedCount = useRef(-1);
   const {
     data: confirmedOrders = [],
     isLoading: loadingConfirmed,
@@ -169,6 +172,23 @@ export default function DeliveryDashboard() {
   );
   const { data: pickedOrders = [] } = useOrdersByStatus(OrderStatus.pickedUp);
   const updateStatus = useUpdateOrderStatus();
+
+  // Detect newly assigned orders
+  useEffect(() => {
+    const count = confirmedOrders.length;
+    if (prevAssignedCount.current === -1) {
+      prevAssignedCount.current = count;
+      return;
+    }
+    if (count > prevAssignedCount.current) {
+      addNotification({
+        title: "New Delivery Assigned 🚚",
+        message: "A new delivery has been assigned to you. Check the details.",
+        type: "order",
+      });
+    }
+    prevAssignedCount.current = count;
+  }, [confirmedOrders.length, addNotification]);
   const [confirmModal, setConfirmModal] = useState<{
     open: boolean;
     message: string;

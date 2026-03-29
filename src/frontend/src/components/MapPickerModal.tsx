@@ -1,15 +1,14 @@
-import L from "leaflet";
-import { MapPin, X } from "lucide-react";
-import "leaflet/dist/leaflet.css";
 import { Button } from "@/components/ui/button";
+import { MapPin, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import iconRetinaUrl from "leaflet/dist/images/marker-icon-2x.png";
-// Fix default marker icons broken by bundlers
-import iconUrl from "leaflet/dist/images/marker-icon.png";
-import shadowUrl from "leaflet/dist/images/marker-shadow.png";
-
-L.Icon.Default.mergeOptions({ iconUrl, iconRetinaUrl, shadowUrl });
+// Leaflet loaded via CDN at runtime to avoid bundler dependency
+declare global {
+  interface Window {
+    // biome-ignore lint/suspicious/noExplicitAny: Leaflet global loaded from CDN
+    L: any;
+  }
+}
 
 interface Props {
   open: boolean;
@@ -23,6 +22,34 @@ const DEFAULT_LAT = 17.339;
 const DEFAULT_LNG = 78.5583;
 const DEFAULT_ZOOM = 15;
 
+const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+
+function loadLeaflet(): Promise<void> {
+  return new Promise((resolve) => {
+    if (window.L) {
+      resolve();
+      return;
+    }
+    // Load CSS
+    if (!document.querySelector(`link[href="${LEAFLET_CSS}"]`)) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = LEAFLET_CSS;
+      document.head.appendChild(link);
+    }
+    // Load JS
+    if (!document.querySelector(`script[src="${LEAFLET_JS}"]`)) {
+      const script = document.createElement("script");
+      script.src = LEAFLET_JS;
+      script.onload = () => resolve();
+      document.head.appendChild(script);
+    } else {
+      resolve();
+    }
+  });
+}
+
 export default function MapPickerModal({
   open,
   initialLat,
@@ -31,16 +58,25 @@ export default function MapPickerModal({
   onClose,
 }: Props) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<L.Map | null>(null);
-  const markerRef = useRef<L.Marker | null>(null);
+  // biome-ignore lint/suspicious/noExplicitAny: Leaflet map/marker objects from CDN
+  const mapRef = useRef<any>(null);
+  // biome-ignore lint/suspicious/noExplicitAny: Leaflet marker object from CDN
+  const markerRef = useRef<any>(null);
   const [pin, setPin] = useState<{ lat: number; lng: number } | null>(
     initialLat && initialLng ? { lat: initialLat, lng: initialLng } : null,
   );
+  const [leafletReady, setLeafletReady] = useState(!!window.L);
 
-  // Initialize map when modal opens
+  // Load Leaflet on mount
+  useEffect(() => {
+    if (!leafletReady) {
+      loadLeaflet().then(() => setLeafletReady(true));
+    }
+  }, [leafletReady]);
+
+  // Initialize map when modal opens and leaflet is ready
   useEffect(() => {
     if (!open) {
-      // Destroy map when modal closes to avoid ghost instances
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
@@ -48,11 +84,12 @@ export default function MapPickerModal({
       }
       return;
     }
+    if (!leafletReady) return;
 
-    // Wait for DOM to be ready
     const timer = setTimeout(() => {
       if (!mapContainerRef.current || mapRef.current) return;
 
+      const L = window.L;
       const startLat = initialLat ?? DEFAULT_LAT;
       const startLng = initialLng ?? DEFAULT_LNG;
 
@@ -70,7 +107,6 @@ export default function MapPickerModal({
         maxZoom: 19,
       }).addTo(map);
 
-      // Place initial marker if coordinates provided
       if (initialLat && initialLng) {
         const marker = L.marker([initialLat, initialLng], {
           draggable: true,
@@ -82,39 +118,28 @@ export default function MapPickerModal({
         });
       }
 
-      // Click to place/move marker
-      map.on("click", (e: L.LeafletMouseEvent) => {
+      map.on("click", (e: { latlng: { lat: number; lng: number } }) => {
         const { lat, lng } = e.latlng;
-
-        // Remove previous marker
         if (markerRef.current) {
           markerRef.current.remove();
           markerRef.current = null;
         }
-
-        // Place new marker
         const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
         markerRef.current = marker;
-
-        // Allow dragging to fine-tune
         marker.on("dragend", () => {
           const pos = marker.getLatLng();
           setPin({ lat: pos.lat, lng: pos.lng });
         });
-
         setPin({ lat, lng });
       });
 
       mapRef.current = map;
-
-      // Force size recalculation
       setTimeout(() => map.invalidateSize(), 100);
     }, 50);
 
     return () => clearTimeout(timer);
-  }, [open, initialLat, initialLng]);
+  }, [open, initialLat, initialLng, leafletReady]);
 
-  // Reset pin state when modal opens
   useEffect(() => {
     if (open) {
       setPin(
@@ -167,10 +192,16 @@ export default function MapPickerModal({
             position: "relative",
           }}
         >
-          <div
-            ref={mapContainerRef}
-            style={{ width: "100%", height: "100%" }}
-          />
+          {!leafletReady ? (
+            <div className="w-full h-full flex items-center justify-center bg-gray-100">
+              <p className="text-sm text-gray-500">Loading map...</p>
+            </div>
+          ) : (
+            <div
+              ref={mapContainerRef}
+              style={{ width: "100%", height: "100%" }}
+            />
+          )}
         </div>
 
         {/* Footer */}
