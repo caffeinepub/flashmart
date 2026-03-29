@@ -32,6 +32,10 @@ interface NotificationContextType {
 const STORAGE_KEY = "flashmart_notifications";
 const MAX_NOTIFICATIONS = 50;
 
+const notificationSound = new Audio(
+  "https://www.soundjay.com/buttons/sounds/button-3.mp3",
+);
+
 const NotificationContext = createContext<NotificationContextType | undefined>(
   undefined,
 );
@@ -62,6 +66,15 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         const updated = [newNotif, ...prev];
         return updated.slice(0, MAX_NOTIFICATIONS);
       });
+      // Play notification sound
+      try {
+        notificationSound.currentTime = 0;
+        notificationSound.play().catch(() => {
+          // Autoplay blocked — silently ignore
+        });
+      } catch {
+        // ignore
+      }
       // Fire browser push notification if permission granted
       if (typeof window !== "undefined" && "Notification" in window) {
         if (Notification.permission === "granted") {
