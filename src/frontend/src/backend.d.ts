@@ -7,22 +7,33 @@ export interface None {
     __kind__: "None";
 }
 export type Option<T> = Some<T> | None;
-export type PhoneNumber = string;
+export interface Store {
+    storeId: bigint;
+    name: string;
+    createdAt: bigint;
+    description: string;
+    isOpen: boolean;
+    deliveryTime: string;
+    vendorId: Principal;
+    category: string;
+    rating: number;
+    image: string;
+}
 export interface Order {
     id: bigint;
+    customerName: string;
     status: OrderStatus;
+    customerPhone: string;
+    storeId: bigint;
     createdAt: bigint;
+    pinnedLongitude: number;
+    pinnedLatitude: number;
+    customerAddress: string;
     itemName: string;
     customerId: Principal;
 }
-export interface UserProfile {
-    id: Principal;
-    name: string;
-    createdAt: bigint;
-    role: UserRole;
-    phone: PhoneNumber;
-}
 export interface Product {
+    storeId: bigint;
     name: string;
     createdAt: bigint;
     description: string;
@@ -30,6 +41,13 @@ export interface Product {
     vendorId: Principal;
     image: string;
     price: number;
+}
+export interface UserProfile {
+    id: Principal;
+    name: string;
+    createdAt: bigint;
+    role: UserRole;
+    phone: string;
 }
 export enum OrderStatus {
     riderAssigned = "riderAssigned",
@@ -50,15 +68,17 @@ export enum UserRole__1 {
     guest = "guest"
 }
 export interface backendInterface {
-    addProduct(name: string, description: string, price: number, image: string): Promise<bigint>;
+    addProduct(storeId: bigint, name: string, description: string, price: number, image: string): Promise<bigint>;
     assignCallerUserRole(user: Principal, role: UserRole__1): Promise<void>;
-    createOrder(itemName: string): Promise<bigint>;
-    createUserProfile(phone: PhoneNumber, name: string, role: UserRole): Promise<void>;
+    createOrder(storeId: bigint, itemName: string, customerName: string, customerPhone: string, customerAddress: string, pinnedLatitude: number, pinnedLongitude: number): Promise<bigint>;
+    createStore(name: string, image: string, category: string, description: string, deliveryTime: string): Promise<bigint>;
+    createUserProfile(phone: string, name: string, role: UserRole): Promise<void>;
     deleteProduct(productId: bigint): Promise<void>;
-    generateOtp(phone: PhoneNumber): Promise<string>;
+    generateOtp(phone: string): Promise<string>;
     getAllCustomers(): Promise<Array<UserProfile>>;
     getAllOrders(): Promise<Array<Order>>;
     getAllProducts(): Promise<Array<Product>>;
+    getAllStores(): Promise<Array<Store>>;
     getAllUsers(): Promise<Array<UserProfile>>;
     getAllVendors(): Promise<Array<UserProfile>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
@@ -68,12 +88,16 @@ export interface backendInterface {
     getOrdersByCustomer(customer: Principal): Promise<Array<Order>>;
     getOrdersByStatus(status: OrderStatus): Promise<Array<Order>>;
     getProductsByVendor(vendorId: Principal): Promise<Array<Product>>;
+    getStoreById(storeId: bigint): Promise<Store | null>;
+    getStoreByVendor(vendorId: Principal): Promise<Store | null>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;
-    isNewUser(phone: PhoneNumber): Promise<boolean>;
+    isNewUser(phone: string): Promise<boolean>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    toggleStoreOpen(storeId: bigint): Promise<boolean>;
     updateOrderStatus(orderId: bigint, newStatus: OrderStatus): Promise<void>;
     updateProduct(productId: bigint, name: string, description: string, price: number, image: string): Promise<void>;
+    updateStore(storeId: bigint, name: string, image: string, category: string, description: string, deliveryTime: string): Promise<void>;
     updateUserRole(user: Principal, newRole: UserRole): Promise<void>;
-    verifyOtp(phone: PhoneNumber, code: string): Promise<boolean>;
+    verifyOtp(phone: string, code: string): Promise<boolean>;
 }

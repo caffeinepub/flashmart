@@ -13,12 +13,15 @@ import Footer from "./components/Footer";
 import Header from "./components/Header";
 import ProtectedRoute from "./components/ProtectedRoute";
 import CartPage from "./pages/CartPage";
+import CreateStorePage from "./pages/CreateStorePage";
 import CustomerDashboard from "./pages/CustomerDashboard";
 import DeliveryDashboard from "./pages/DeliveryDashboard";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import OTPPage from "./pages/OTPPage";
 import RoleSelectionPage from "./pages/RoleSelectionPage";
+import StoreDetailPage from "./pages/StoreDetailPage";
+import StoreListPage from "./pages/StoreListPage";
 import VendorDashboard from "./pages/VendorDashboard";
 
 const AUTH_SCREENS: AppScreen[] = [
@@ -31,6 +34,9 @@ const DASHBOARD_SCREENS: AppScreen[] = [
   "vendor-dashboard",
   "delivery-dashboard",
   "cart",
+  "store-list",
+  "store-detail",
+  "create-store",
 ];
 
 function roleToScreen(role: UserRole): AppScreen {
@@ -113,6 +119,19 @@ function AppContent() {
         return <CustomerDashboard />;
       case "cart":
         return <CartPage />;
+      case "store-list":
+        return <StoreListPage />;
+      case "store-detail":
+        return <StoreDetailPage />;
+      case "create-store":
+        return (
+          <ProtectedRoute
+            dashboardRole="vendor"
+            onCancel={() => navigate("landing")}
+          >
+            <CreateStorePage />
+          </ProtectedRoute>
+        );
       case "vendor-dashboard":
         return (
           <ProtectedRoute

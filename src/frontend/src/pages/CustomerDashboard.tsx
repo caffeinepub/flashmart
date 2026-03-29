@@ -1,38 +1,29 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   AlertCircle,
   CheckCircle2,
   Clock,
   Loader2,
   MapPin,
-  Package,
   RefreshCw,
   ShoppingBag,
   ShoppingCart,
+  Store,
   Truck,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
-import { type Order, OrderStatus, type Product } from "../backend";
+import { type Order, OrderStatus } from "../backend";
 import ConfirmModal from "../components/ConfirmModal";
 import LocationModal from "../components/LocationModal";
 import OutOfRangeModal from "../components/OutOfRangeModal";
-import SmartSearchBar from "../components/SmartSearchBar";
 import { useApp } from "../context/AppContext";
 import { useCart } from "../context/CartContext";
 import { useNotifications } from "../context/NotificationContext";
 import { useLocation } from "../hooks/useLocation";
-import {
-  useAllProducts,
-  useCreateOrder,
-  useMyOrders,
-} from "../hooks/useQueries";
-import { filterAndRankProducts } from "../utils/searchUtils";
+import { useAllStores, useMyOrders } from "../hooks/useQueries";
 
 const statusConfig: Record<
   OrderStatus,
@@ -56,7 +47,7 @@ const statusConfig: Record<
   [OrderStatus.pickedUp]: {
     label: "Picked Up",
     color: "bg-orange-100 text-orange-800 border-orange-300",
-    icon: Package,
+    icon: ShoppingBag,
   },
   [OrderStatus.delivered]: {
     label: "Delivered",
@@ -65,82 +56,13 @@ const statusConfig: Record<
   },
 };
 
-function ProductCard({
-  product,
-  idx,
-  onAddToCart,
-  cartQty,
-}: {
-  product: Product;
-  idx: number;
-  onAddToCart: (product: Product) => void;
-  cartQty: number;
-}) {
-  const imgSrc =
-    product.image && product.image.trim() !== ""
-      ? product.image
-      : `https://picsum.photos/seed/${product.productId}/200/140`;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.04 * idx, duration: 0.3 }}
-      whileHover={{ y: -2, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }}
-      className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col"
-      data-ocid={`products.item.${idx + 1}`}
-    >
-      <div className="relative">
-        <img
-          src={imgSrc}
-          alt={product.name}
-          className="w-full h-28 object-cover"
-          loading="lazy"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src =
-              `https://picsum.photos/seed/${product.productId}/200/140`;
-          }}
-        />
-        {cartQty > 0 && (
-          <div className="absolute top-2 right-2">
-            <span className="inline-flex items-center justify-center w-5 h-5 bg-green-600 text-white text-[10px] font-extrabold rounded-full shadow">
-              {cartQty}
-            </span>
-          </div>
-        )}
-      </div>
-      <div className="p-2.5 flex flex-col flex-1">
-        <p className="font-bold text-sm text-gray-900 leading-tight truncate">
-          {product.name}
-        </p>
-        <p className="text-[11px] text-gray-500 mt-0.5 leading-tight line-clamp-1">
-          {product.description}
-        </p>
-        <div className="flex items-center justify-between mt-2">
-          <span className="font-extrabold text-sm text-gray-900">
-            ₹{product.price}
-          </span>
-        </div>
-        <Button
-          size="sm"
-          onClick={() => onAddToCart(product)}
-          className="mt-2 w-full h-7 text-xs font-bold rounded-lg bg-green-500 hover:bg-green-600 text-white border-0"
-          data-ocid={`products.item.${idx + 1}.button`}
-        >
-          {cartQty > 0 ? `Add More (${cartQty})` : "Add to Cart"}
-        </Button>
-      </div>
-    </motion.div>
-  );
-}
-
 function OrderCard({
   order,
   idx,
   isExpired,
 }: { order: Order; idx: number; isExpired?: boolean }) {
   const cfg = statusConfig[order.status];
-  const Icon = cfg.icon;
+  const Icon = cfg?.icon ?? Clock;
 
   if (isExpired) {
     return (
@@ -189,24 +111,25 @@ function OrderCard({
       </div>
       <Badge
         variant="outline"
-        className={`text-xs flex-shrink-0 gap-1 font-semibold ${cfg.color}`}
+        className={`text-xs flex-shrink-0 gap-1 font-semibold ${
+          cfg ? cfg.color : "bg-gray-100 text-gray-700 border-gray-300"
+        }`}
       >
         <Icon className="w-3 h-3" />
-        {cfg.label}
+        {cfg ? cfg.label : order.status}
       </Badge>
     </motion.div>
   );
 }
 
 export default function CustomerDashboard() {
-  const { currentUser, navigate } = useApp();
+  const { currentUser, navigate, setCurrentStoreId } = useApp();
   const { addNotification } = useNotifications();
-  const { addItem, totalItems, items } = useCart();
+  const { totalItems } = useCart();
   const customerId = currentUser?.id?.toString();
   const { data: orders = [], isLoading: ordersLoading } =
     useMyOrders(customerId);
-  const { data: products = [], isLoading: productsLoading } = useAllProducts();
-  const createOrder = useCreateOrder();
+  const { data: stores = [], isLoading: storesLoading } = useAllStores();
   const { status, inZone, requestLocation } = useLocation();
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [pushDismissed, setPushDismissed] = useState(
@@ -217,20 +140,13 @@ export default function CustomerDashboard() {
         Notification.permission !== "default"),
   );
   const [showOutOfRange, setShowOutOfRange] = useState(false);
-  const [itemName, setItemName] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [activeSearch, setActiveSearch] = useState("");
-  const [itemError, setItemError] = useState("");
-  const [lastCreated, setLastCreated] = useState("");
-  const [confirmModal, setConfirmModal] = useState<{
+  const [confirmModal] = useState<{
     open: boolean;
     message: string;
     action: (() => void) | null;
   }>({ open: false, message: "", action: null });
 
-  const orderFormRef = useRef<HTMLDivElement>(null);
-
-  // ── Order Expiry Logic ─────────────────────────────────────────────────
+  // ── Order Expiry Logic ──────────────────────────────────────────────────────────
   const [expiredOrderIds, setExpiredOrderIds] = useState<Set<string>>(() => {
     try {
       const stored = localStorage.getItem("flashmart_expired_orders");
@@ -300,7 +216,7 @@ export default function CustomerDashboard() {
     }
   }, [status]);
 
-  // ── Status change notifications ────────────────────────────────────────
+  // ── Status change notifications ────────────────────────────────────────────────
   const prevStatuses = useRef<Map<string, string>>(new Map());
   useEffect(() => {
     for (const order of orders) {
@@ -308,30 +224,22 @@ export default function CustomerDashboard() {
       const prev = prevStatuses.current.get(id);
       const curr = order.status as string;
       if (prev && prev !== curr) {
-        const rawItems = (() => {
-          try {
-            const p = JSON.parse(order.itemName);
-            return p?.items || order.itemName;
-          } catch {
-            return order.itemName;
-          }
-        })();
         if (curr === OrderStatus.storeConfirmed) {
           addNotification({
             title: "Order Accepted ✅",
-            message: `A vendor accepted your order for ${rawItems}!`,
+            message: `A vendor accepted your order for ${order.itemName}!`,
             type: "order",
           });
         } else if (curr === OrderStatus.riderAssigned) {
           addNotification({
             title: "Out for Delivery 🚴",
-            message: `Your ${rawItems} is on the way!`,
+            message: `Your ${order.itemName} is on the way!`,
             type: "order",
           });
         } else if (curr === OrderStatus.delivered) {
           addNotification({
             title: "Delivered! 🎉",
-            message: `Your ${rawItems} has been delivered. Enjoy!`,
+            message: `Your ${order.itemName} has been delivered. Enjoy!`,
             type: "order",
           });
         }
@@ -340,7 +248,7 @@ export default function CustomerDashboard() {
     }
   }, [orders, addNotification]);
 
-  // ── Time-based offer notifications (once per slot per day) ─────────────
+  // ── Time-based offer notifications ──────────────────────────────────────────
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally run once on mount only
   useEffect(() => {
     const hour = new Date().getHours();
@@ -386,69 +294,6 @@ export default function CustomerDashboard() {
     );
   }, []);
 
-  // ── Cart abandonment reminder (10 min) ────────────────────────────────
-  useEffect(() => {
-    if (items.length === 0) return;
-    const timer = setTimeout(
-      () => {
-        addNotification({
-          title: "You left something behind 👀",
-          message:
-            "Your cart is waiting — complete your order before items run out!",
-          type: "reminder",
-        });
-      },
-      10 * 60 * 1000,
-    );
-    return () => clearTimeout(timer);
-  }, [items.length, addNotification]);
-
-  const handleAddToCart = (product: Product) => {
-    addItem({
-      id: product.productId.toString(),
-      name: product.name,
-      price: product.price,
-    });
-    toast.success(`${product.name} added to cart!`);
-  };
-
-  const handleRequest = () => {
-    if (!itemName.trim()) {
-      setItemError("Please enter an item name.");
-      return;
-    }
-    if (itemName.trim().length > 100) {
-      setItemError("Item name too long (max 100 chars).");
-      return;
-    }
-    setItemError("");
-    const name = itemName.trim();
-    setConfirmModal({
-      open: true,
-      message: `Place order for "${name}"?`,
-      action: async () => {
-        try {
-          await createOrder.mutateAsync(name);
-          setLastCreated(name);
-          setItemName("");
-          toast.success("Order placed successfully!");
-        } catch (e: unknown) {
-          const msg = e instanceof Error ? e.message : "Failed to place order.";
-          toast.error(msg);
-        }
-      },
-    });
-  };
-
-  const handleConfirm = () => {
-    confirmModal.action?.();
-    setConfirmModal({ open: false, message: "", action: null });
-  };
-
-  const handleCancel = () => {
-    setConfirmModal({ open: false, message: "", action: null });
-  };
-
   const activeOrders = orders.filter(
     (o) =>
       o.status !== OrderStatus.delivered &&
@@ -461,8 +306,6 @@ export default function CustomerDashboard() {
     (o) => o.status === OrderStatus.delivered,
   );
 
-  const filteredProducts = filterAndRankProducts(products, activeSearch);
-
   const renderLocationBanner = () => {
     if (status === "in_range") {
       return (
@@ -473,15 +316,12 @@ export default function CustomerDashboard() {
           data-ocid="dashboard.location_indicator"
         >
           <MapPin className="w-4 h-4 text-green-600 flex-shrink-0" />
-          <div>
-            <span className="text-sm font-bold text-green-700">
-              ✅ Inside Delivery Zone — Delivery available!
-            </span>
-          </div>
+          <span className="text-sm font-bold text-green-700">
+            ✅ Inside Delivery Zone — Delivery available!
+          </span>
         </motion.div>
       );
     }
-
     if (status === "out_of_range") {
       return (
         <motion.div
@@ -491,15 +331,12 @@ export default function CustomerDashboard() {
           data-ocid="dashboard.location_indicator"
         >
           <MapPin className="w-4 h-4 text-red-500 flex-shrink-0" />
-          <div>
-            <span className="text-sm font-bold text-red-700">
-              ❌ Outside Delivery Zone — Delivery not available in your area
-            </span>
-          </div>
+          <span className="text-sm font-bold text-red-700">
+            ❌ Outside Delivery Zone — Delivery not available in your area
+          </span>
         </motion.div>
       );
     }
-
     if (status === "denied") {
       return (
         <motion.div
@@ -515,7 +352,6 @@ export default function CustomerDashboard() {
         </motion.div>
       );
     }
-
     if (status === "requesting") {
       return (
         <motion.div
@@ -531,8 +367,6 @@ export default function CustomerDashboard() {
         </motion.div>
       );
     }
-
-    // idle — show prominent Enable Location card
     return (
       <motion.div
         initial={{ opacity: 0, y: -6 }}
@@ -561,7 +395,6 @@ export default function CustomerDashboard() {
     );
   };
 
-  // suppress unused variable warning for inZone (used implicitly via status)
   void inZone;
 
   return (
@@ -581,8 +414,8 @@ export default function CustomerDashboard() {
       <ConfirmModal
         open={confirmModal.open}
         message={confirmModal.message}
-        onConfirm={handleConfirm}
-        onCancel={handleCancel}
+        onConfirm={() => {}}
+        onCancel={() => {}}
       />
 
       {/* Push Notification Permission Banner */}
@@ -632,11 +465,12 @@ export default function CustomerDashboard() {
             initial={{ opacity: 0, y: -16 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -16 }}
-            className="fixed top-4 left-0 right-0 mx-4 z-50 max-w-lg mx-auto"
+            className="fixed top-4 z-50"
             style={{
               maxWidth: "32rem",
               left: "50%",
               transform: "translateX(-50%)",
+              width: "calc(100% - 2rem)",
             }}
           >
             <div className="bg-red-600 text-white rounded-2xl shadow-xl p-4">
@@ -661,7 +495,7 @@ export default function CustomerDashboard() {
                 <Button
                   size="sm"
                   onClick={() => {
-                    navigate("cart");
+                    navigate("store-list");
                     setExpiredNotification(null);
                   }}
                   className="bg-white text-red-600 hover:bg-red-50 font-bold text-xs flex-1 gap-1"
@@ -711,177 +545,101 @@ export default function CustomerDashboard() {
       {/* Location Banner */}
       {renderLocationBanner()}
 
-      {/* ── Product Grid ── */}
-      <section className="mb-8" data-ocid="products.section">
+      {/* ── Browse Stores Section ── */}
+      <section className="mb-8" data-ocid="stores.section">
         <div className="flex items-center justify-between mb-3">
           <div>
             <h2 className="text-lg font-extrabold text-gray-900">
-              🛒 Shop Groceries
+              🏪 Browse Stores
             </h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              Delivered in minutes to your door
+              Shop from local vendors near you
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => navigate("store-list")}
+            className="text-xs font-bold text-green-600 hover:text-green-700"
+            data-ocid="stores.view_all.button"
+          >
+            See all
+          </button>
         </div>
-        <SmartSearchBar
-          products={products}
-          value={searchQuery}
-          onChange={setSearchQuery}
-          onSearch={(q) => setActiveSearch(q)}
-        />
-        {activeSearch && (
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs text-gray-500">
-              {filteredProducts.length === 0
-                ? "No results found"
-                : `${filteredProducts.length} result${filteredProducts.length !== 1 ? "s" : ""} for "${activeSearch}"`}
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery("");
-                setActiveSearch("");
-              }}
-              className="text-xs text-green-600 font-semibold hover:underline"
-            >
-              Show all
-            </button>
-          </div>
-        )}
 
-        {productsLoading ? (
-          <div
-            className="flex items-center justify-center gap-2 text-gray-500 text-sm py-10"
-            data-ocid="products.loading_state"
-          >
-            <Loader2 className="w-5 h-5 animate-spin" /> Loading products...
-          </div>
-        ) : products.length === 0 ? (
-          <div
-            className="text-center py-12 text-gray-500 text-sm bg-gray-50 rounded-2xl"
-            data-ocid="products.empty_state"
-          >
-            <ShoppingBag className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-            <p className="font-semibold text-gray-600">
-              No products available yet.
-            </p>
-            <p className="text-xs mt-1">
-              Check back soon — vendors are stocking up!
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {filteredProducts.map((product, idx) => {
-              const cartItem = items.find(
-                (i) => i.id === product.productId.toString(),
-              );
-              return (
-                <ProductCard
-                  key={product.productId.toString()}
-                  product={product}
-                  idx={idx}
-                  onAddToCart={handleAddToCart}
-                  cartQty={cartItem?.quantity ?? 0}
-                />
-              );
-            })}
-          </div>
-        )}
-
-        {totalItems > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-4"
-          >
-            <Button
-              onClick={() => navigate("cart")}
-              className="w-full h-12 text-base font-extrabold bg-green-500 hover:bg-green-600 text-white rounded-xl shadow"
-            >
-              <ShoppingCart className="w-5 h-5 mr-2" />
-              View Cart ({totalItems} items)
-            </Button>
-          </motion.div>
-        )}
-      </section>
-
-      {/* ── Order Input ── */}
-      <div ref={orderFormRef}>
-        <Card
-          className="mb-6 shadow-card border-border"
-          data-ocid="order.panel"
-        >
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-bold flex items-center gap-2 text-foreground">
-              <ShoppingBag className="w-4 h-4 text-primary" />
-              Request a Custom Item
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div>
-              <Label
-                htmlFor="item"
-                className="text-sm font-semibold text-foreground"
-              >
-                What item do you need?
-              </Label>
-              <Input
-                id="item"
-                placeholder="e.g. 1kg onions, Paracetamol 500mg, Phone charger..."
-                value={itemName}
-                onChange={(e) => {
-                  setItemName(e.target.value);
-                  setItemError("");
-                }}
-                className="mt-1.5 border-border bg-white text-foreground"
-                data-ocid="order.item.input"
-                onKeyDown={(e) => e.key === "Enter" && handleRequest()}
-                maxLength={100}
+        {storesLoading ? (
+          <div className="grid grid-cols-2 gap-3">
+            {["pl1", "pl2", "pl3", "pl4"].map((k) => (
+              <div
+                key={k}
+                className="bg-gray-100 animate-pulse rounded-2xl h-36"
               />
-              {itemError && (
-                <p
-                  className="text-xs text-destructive font-semibold mt-1"
-                  data-ocid="order.item_error"
+            ))}
+          </div>
+        ) : stores.length === 0 ? (
+          <Card
+            className="border-dashed border-2 border-gray-200"
+            data-ocid="stores.empty_state"
+          >
+            <CardContent className="py-10 flex flex-col items-center gap-3">
+              <Store className="w-10 h-10 text-gray-300" />
+              <p className="text-sm font-semibold text-gray-500">
+                No stores available yet
+              </p>
+              <p className="text-xs text-gray-400">
+                Vendors are setting up their stores
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              {stores.slice(0, 4).map((store, idx) => (
+                <motion.button
+                  key={store.storeId.toString()}
+                  type="button"
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => {
+                    setCurrentStoreId(store.storeId);
+                    navigate("store-detail");
+                  }}
+                  className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden text-left transition-shadow hover:shadow-md"
+                  data-ocid={`dashboard.stores.item.${idx + 1}`}
                 >
-                  {itemError}
-                </p>
-              )}
+                  <img
+                    src={
+                      store.image && store.image.trim() !== ""
+                        ? store.image
+                        : `https://via.placeholder.com/200x100?text=${encodeURIComponent(store.name)}`
+                    }
+                    alt={store.name}
+                    className="w-full h-20 object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src =
+                        `https://via.placeholder.com/200x100?text=${encodeURIComponent(store.name)}`;
+                    }}
+                  />
+                  <div className="p-2">
+                    <p className="font-extrabold text-xs text-gray-900 truncate">
+                      {store.name}
+                    </p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      {store.deliveryTime}
+                    </p>
+                  </div>
+                </motion.button>
+              ))}
             </div>
             <Button
-              onClick={handleRequest}
-              disabled={createOrder.isPending}
-              className="w-full bg-primary hover:bg-primary/90 text-white font-semibold"
-              data-ocid="order.request.primary_button"
+              onClick={() => navigate("store-list")}
+              className="w-full mt-3 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl"
+              data-ocid="stores.browse.primary_button"
             >
-              {createOrder.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Placing Order...
-                </>
-              ) : (
-                "Request Item"
-              )}
+              <Store className="w-4 h-4 mr-2" />
+              Browse All Stores
             </Button>
-
-            <AnimatePresence>
-              {lastCreated && (
-                <motion.div
-                  initial={{ opacity: 0, y: -8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className="bg-primary/10 border border-primary/30 rounded-lg p-3 flex items-center gap-2"
-                  data-ocid="order.success_state"
-                >
-                  <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />
-                  <p className="text-sm text-primary font-semibold">
-                    Order placed for &ldquo;{lastCreated}&rdquo;!
-                  </p>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </CardContent>
-        </Card>
-      </div>
+          </>
+        )}
+      </section>
 
       {/* Active Orders */}
       <div className="mb-6">
@@ -901,7 +659,7 @@ export default function CustomerDashboard() {
             className="text-center py-8 text-foreground/60 text-sm font-medium bg-muted/50 rounded-xl"
             data-ocid="orders.empty_state"
           >
-            No active orders. Request something above!
+            No active orders. Shop from a store above!
           </div>
         ) : (
           <div className="space-y-2">

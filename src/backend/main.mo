@@ -1,4 +1,5 @@
 import Time "mo:core/Time";
+import List "mo:core/List";
 import Int "mo:core/Int";
 import Text "mo:core/Text";
 import Map "mo:core/Map";
@@ -8,15 +9,13 @@ import Array "mo:core/Array";
 import Principal "mo:core/Principal";
 import Runtime "mo:core/Runtime";
 import MixinAuthorization "authorization/MixinAuthorization";
+import Migration "migration";
 import AccessControl "authorization/access-control";
 
-
-
+(with migration = Migration.run)
 actor {
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
-
-  public type PhoneNumber = Text;
 
   public type UserRole = {
     #customer;
@@ -27,6 +26,7 @@ actor {
 
   public type Product = {
     productId : Int;
+    storeId : Int;
     name : Text;
     description : Text;
     price : Float;
@@ -41,9 +41,22 @@ actor {
     };
   };
 
+  public type Store = {
+    storeId : Int;
+    name : Text;
+    image : Text;
+    category : Text;
+    description : Text;
+    deliveryTime : Text;
+    vendorId : Principal;
+    isOpen : Bool;
+    rating : Float;
+    createdAt : Int;
+  };
+
   public type UserProfile = {
     id : Principal;
-    phone : PhoneNumber;
+    phone : Text;
     name : Text;
     role : UserRole;
     createdAt : Int;
@@ -65,7 +78,13 @@ actor {
 
   public type Order = {
     id : Int;
+    storeId : Int;
     itemName : Text;
+    customerName : Text;
+    customerPhone : Text;
+    customerAddress : Text;
+    pinnedLatitude : Float;
+    pinnedLongitude : Float;
     customerId : Principal;
     status : OrderStatus;
     createdAt : Int;
@@ -79,11 +98,13 @@ actor {
 
   // Storage
   let users = Map.empty<Principal, UserProfile>();
+  let stores = Map.empty<Int, Store>();
   let products = Map.empty<Int, Product>();
   let otps = Map.empty<Text, OTP>();
   let orders = Map.empty<Int, Order>();
-  var nextOrderId = 1;
-  var nextProductId = 1;
+  var nextOrderId : Nat = 1;
+  var nextProductId : Nat = 1;
+  var nextStoreId : Nat = 1;
 
   func isAppAdmin(principal : Principal) : Bool {
     switch (users.get(principal)) {
@@ -93,7 +114,7 @@ actor {
   };
 
   // Public - no authentication required
-  public shared ({ caller }) func generateOtp(phone : PhoneNumber) : async Text {
+  public shared ({ caller }) func generateOtp(phone : Text) : async Text {
     let t = Int.abs(Time.now());
     let raw = (t + phone.size()) % 900000;
     let code = (100000 + raw).toText();
@@ -107,7 +128,7 @@ actor {
   };
 
   // Public - no authentication required
-  public shared ({ caller }) func verifyOtp(phone : PhoneNumber, code : Text) : async Bool {
+  public shared ({ caller }) func verifyOtp(phone : Text, code : Text) : async Bool {
     switch (otps.get(phone)) {
       case (null) { false };
       case (?otp) {
@@ -122,8 +143,99 @@ actor {
     };
   };
 
+  // 1. Store Management
+  public shared ({ caller }) func createStore(name : Text, image : Text, category : Text, description : Text, deliveryTime : Text) : async Int {
+    // Check that store with caller as vendorId does not already exist
+    let storeExists = stores.values().any(func(s) { s.vendorId == caller });
+    if (storeExists) { Runtime.trap("Store already exists") };
+
+    let storeId = nextStoreId;
+    nextStoreId += 1;
+
+    let store = {
+      storeId;
+      name;
+      image;
+      category;
+      description;
+      deliveryTime;
+      vendorId = caller;
+      isOpen = true;
+      rating = 0.0;
+      createdAt = Time.now();
+    };
+
+    stores.add(storeId, store);
+    storeId;
+  };
+
+  public shared ({ caller }) func updateStore(storeId : Int, name : Text, image : Text, category : Text, description : Text, deliveryTime : Text) : async () {
+    switch (stores.get(storeId)) {
+      case (null) { Runtime.trap("Store not found") };
+      case (?store) {
+        // Authorization: Only store owner or admin can update
+        if (store.vendorId != caller and not isAppAdmin(caller)) {
+          Runtime.trap("Unauthorized: Can only update your own store");
+        };
+        
+        let updatedStore = {
+          storeId;
+          name;
+          image;
+          category;
+          description;
+          deliveryTime;
+          vendorId = store.vendorId;
+          isOpen = store.isOpen;
+          rating = store.rating;
+          createdAt = store.createdAt;
+        };
+        stores.add(storeId, updatedStore);
+      };
+    };
+  };
+
+  public shared ({ caller }) func toggleStoreOpen(storeId : Int) : async Bool {
+    switch (stores.get(storeId)) {
+      case (null) { Runtime.trap("Store not found") };
+      case (?store) {
+        // Authorization: Only store owner or admin can toggle
+        if (store.vendorId != caller and not isAppAdmin(caller)) {
+          Runtime.trap("Unauthorized: Can only toggle your own store");
+        };
+        
+        let updatedStore = {
+          storeId = store.storeId;
+          name = store.name;
+          image = store.image;
+          category = store.category;
+          description = store.description;
+          deliveryTime = store.deliveryTime;
+          vendorId = store.vendorId;
+          isOpen = not store.isOpen;
+          rating = store.rating;
+          createdAt = store.createdAt;
+        };
+        stores.add(storeId, updatedStore);
+        updatedStore.isOpen;
+      };
+    };
+  };
+
+  public query ({ caller }) func getStoreByVendor(vendorId : Principal) : async ?Store {
+    stores.values().find(func(store) { store.vendorId == vendorId });
+  };
+
+  public query ({ caller }) func getStoreById(storeId : Int) : async ?Store {
+    stores.get(storeId);
+  };
+
+  public query ({ caller }) func getAllStores() : async [Store] {
+    stores.values().toArray();
+  };
+
   // All self-registrations are forced to customer role -- no AccessControl.assignRole call
-  public shared ({ caller }) func createUserProfile(phone : PhoneNumber, name : Text, role : UserRole) : async () {
+  public shared ({ caller }) func createUserProfile(phone : Text, name : Text, role : UserRole) : async () {
     let profile = { id = caller; phone; name; role = #customer; createdAt = Time.now() };
     users.add(caller, profile);
   };
@@ -149,7 +261,7 @@ actor {
   };
 
   // Public - no authentication required
-  public query ({ caller }) func isNewUser(phone : PhoneNumber) : async Bool {
+  public query ({ caller }) func isNewUser(phone : Text) : async Bool {
     for (user in users.values()) {
       if (user.phone == phone) { return false };
     };
@@ -182,12 +294,18 @@ actor {
     users.add(caller, profile);
   };
 
-  public shared ({ caller }) func createOrder(itemName : Text) : async Int {
+  public shared ({ caller }) func createOrder(storeId : Int, itemName : Text, customerName : Text, customerPhone : Text, customerAddress : Text, pinnedLatitude : Float, pinnedLongitude : Float) : async Int {
     let orderId = nextOrderId;
     nextOrderId += 1;
     let order = { 
       id = orderId; 
+      storeId; 
       itemName; 
+      customerName; 
+      customerPhone; 
+      customerAddress;
+      pinnedLatitude;
+      pinnedLongitude;
       customerId = caller; 
       status = #requested; 
       createdAt = Time.now() 
@@ -196,35 +314,60 @@ actor {
     orderId;
   };
 
-  public query ({ caller }) func getOrderById(orderId : Int) : async ?Order {
-    switch (orders.get(orderId)) {
-      case (null) { null };
-      case (?order) { ?order };
-    };
-  };
-
-  public query ({ caller }) func getOrdersByCustomer(customer : Principal) : async [Order] {
-    orders.values().toArray().filter(func(o) { o.customerId == customer });
-  };
-
-  public query ({ caller }) func getOrdersByStatus(status : OrderStatus) : async [Order] {
-    orders.values().toArray().filter(func(o) { o.status == status });
-  };
-
+  // Per specification: "updateOrderStatus allows any caller (no auth check)"
   public shared ({ caller }) func updateOrderStatus(orderId : Int, newStatus : OrderStatus) : async () {
     switch (orders.get(orderId)) {
       case (null) { Runtime.trap("Order not found") };
       case (?order) {
         let updatedOrder = { 
-          id = order.id; 
-          itemName = order.itemName; 
-          customerId = order.customerId; 
+          id = order.id;
+          storeId = order.storeId;
+          itemName = order.itemName;
+          customerName = order.customerName;
+          customerPhone = order.customerPhone;
+          customerAddress = order.customerAddress;
+          pinnedLatitude = order.pinnedLatitude;
+          pinnedLongitude = order.pinnedLongitude;
+          customerId = order.customerId;
           status = newStatus; 
           createdAt = order.createdAt 
         };
         orders.add(orderId, updatedOrder);
       };
     };
+  };
+
+  public query ({ caller }) func getOrderById(orderId : Int) : async ?Order {
+    switch (orders.get(orderId)) {
+      case (null) { null };
+      case (?order) {
+        // Authorization: Only customer, store owner, or admin can view
+        let isCustomer = order.customerId == caller;
+        let isStoreOwner = switch (stores.get(order.storeId)) {
+          case (null) { false };
+          case (?store) { store.vendorId == caller };
+        };
+        
+        if (not isCustomer and not isStoreOwner and not isAppAdmin(caller)) {
+          Runtime.trap("Unauthorized: Can only view orders you are involved in");
+        };
+        
+        ?order;
+      };
+    };
+  };
+
+  public query ({ caller }) func getOrdersByCustomer(customer : Principal) : async [Order] {
+    // Authorization: Only the customer themselves or admin can view
+    if (caller != customer and not isAppAdmin(caller)) {
+      Runtime.trap("Unauthorized: Can only view your own orders");
+    };
+    
+    orders.values().toArray().filter(func(o) { o.customerId == customer });
+  };
+
+  public query ({ caller }) func getOrdersByStatus(status : OrderStatus) : async [Order] {
+    orders.values().toArray().filter(func(o) { o.status == status });
   };
 
   public query ({ caller }) func getAllOrders() : async [Order] {
@@ -246,11 +389,22 @@ actor {
   };
 
   // Product Management
-  public shared ({ caller }) func addProduct(name : Text, description : Text, price : Float, image : Text) : async Int {
+  public shared ({ caller }) func addProduct(storeId : Int, name : Text, description : Text, price : Float, image : Text) : async Int {
+    // Authorization: Verify caller owns the store
+    switch (stores.get(storeId)) {
+      case (null) { Runtime.trap("Store not found") };
+      case (?store) {
+        if (store.vendorId != caller and not isAppAdmin(caller)) {
+          Runtime.trap("Unauthorized: Can only add products to your own store");
+        };
+      };
+    };
+    
     let productId = nextProductId;
     nextProductId += 1;
     let product = {
       productId;
+      storeId;
       name;
       description;
       price;
@@ -271,6 +425,7 @@ actor {
         };
         let updatedProduct = {
           productId;
+          storeId = product.storeId;
           name;
           description;
           price;

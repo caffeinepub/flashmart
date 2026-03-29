@@ -13,7 +13,6 @@ export const UserRole__1 = IDL.Variant({
   'user' : IDL.Null,
   'guest' : IDL.Null,
 });
-export const PhoneNumber = IDL.Text;
 export const UserRole = IDL.Variant({
   'admin' : IDL.Null,
   'customer' : IDL.Null,
@@ -25,7 +24,7 @@ export const UserProfile = IDL.Record({
   'name' : IDL.Text,
   'createdAt' : IDL.Int,
   'role' : UserRole,
-  'phone' : PhoneNumber,
+  'phone' : IDL.Text,
 });
 export const OrderStatus = IDL.Variant({
   'riderAssigned' : IDL.Null,
@@ -36,12 +35,19 @@ export const OrderStatus = IDL.Variant({
 });
 export const Order = IDL.Record({
   'id' : IDL.Int,
+  'customerName' : IDL.Text,
   'status' : OrderStatus,
+  'customerPhone' : IDL.Text,
+  'storeId' : IDL.Int,
   'createdAt' : IDL.Int,
+  'pinnedLongitude' : IDL.Float64,
+  'pinnedLatitude' : IDL.Float64,
+  'customerAddress' : IDL.Text,
   'itemName' : IDL.Text,
   'customerId' : IDL.Principal,
 });
 export const Product = IDL.Record({
+  'storeId' : IDL.Int,
   'name' : IDL.Text,
   'createdAt' : IDL.Int,
   'description' : IDL.Text,
@@ -50,22 +56,52 @@ export const Product = IDL.Record({
   'image' : IDL.Text,
   'price' : IDL.Float64,
 });
+export const Store = IDL.Record({
+  'storeId' : IDL.Int,
+  'name' : IDL.Text,
+  'createdAt' : IDL.Int,
+  'description' : IDL.Text,
+  'isOpen' : IDL.Bool,
+  'deliveryTime' : IDL.Text,
+  'vendorId' : IDL.Principal,
+  'category' : IDL.Text,
+  'rating' : IDL.Float64,
+  'image' : IDL.Text,
+});
 
 export const idlService = IDL.Service({
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
   'addProduct' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Float64, IDL.Text],
+      [IDL.Int, IDL.Text, IDL.Text, IDL.Float64, IDL.Text],
       [IDL.Int],
       [],
     ),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole__1], [], []),
-  'createOrder' : IDL.Func([IDL.Text], [IDL.Int], []),
-  'createUserProfile' : IDL.Func([PhoneNumber, IDL.Text, UserRole], [], []),
+  'createOrder' : IDL.Func(
+      [
+        IDL.Int,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Float64,
+        IDL.Float64,
+      ],
+      [IDL.Int],
+      [],
+    ),
+  'createStore' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Int],
+      [],
+    ),
+  'createUserProfile' : IDL.Func([IDL.Text, IDL.Text, UserRole], [], []),
   'deleteProduct' : IDL.Func([IDL.Int], [], []),
-  'generateOtp' : IDL.Func([PhoneNumber], [IDL.Text], []),
+  'generateOtp' : IDL.Func([IDL.Text], [IDL.Text], []),
   'getAllCustomers' : IDL.Func([], [IDL.Vec(UserProfile)], ['query']),
   'getAllOrders' : IDL.Func([], [IDL.Vec(Order)], ['query']),
   'getAllProducts' : IDL.Func([], [IDL.Vec(Product)], ['query']),
+  'getAllStores' : IDL.Func([], [IDL.Vec(Store)], ['query']),
   'getAllUsers' : IDL.Func([], [IDL.Vec(UserProfile)], ['query']),
   'getAllVendors' : IDL.Func([], [IDL.Vec(UserProfile)], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
@@ -83,22 +119,30 @@ export const idlService = IDL.Service({
       [IDL.Vec(Product)],
       ['query'],
     ),
+  'getStoreById' : IDL.Func([IDL.Int], [IDL.Opt(Store)], ['query']),
+  'getStoreByVendor' : IDL.Func([IDL.Principal], [IDL.Opt(Store)], ['query']),
   'getUserProfile' : IDL.Func(
       [IDL.Principal],
       [IDL.Opt(UserProfile)],
       ['query'],
     ),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
-  'isNewUser' : IDL.Func([PhoneNumber], [IDL.Bool], ['query']),
+  'isNewUser' : IDL.Func([IDL.Text], [IDL.Bool], ['query']),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+  'toggleStoreOpen' : IDL.Func([IDL.Int], [IDL.Bool], []),
   'updateOrderStatus' : IDL.Func([IDL.Int, OrderStatus], [], []),
   'updateProduct' : IDL.Func(
       [IDL.Int, IDL.Text, IDL.Text, IDL.Float64, IDL.Text],
       [],
       [],
     ),
+  'updateStore' : IDL.Func(
+      [IDL.Int, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+      [],
+      [],
+    ),
   'updateUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
-  'verifyOtp' : IDL.Func([PhoneNumber, IDL.Text], [IDL.Bool], []),
+  'verifyOtp' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
 });
 
 export const idlInitArgs = [];
@@ -109,7 +153,6 @@ export const idlFactory = ({ IDL }) => {
     'user' : IDL.Null,
     'guest' : IDL.Null,
   });
-  const PhoneNumber = IDL.Text;
   const UserRole = IDL.Variant({
     'admin' : IDL.Null,
     'customer' : IDL.Null,
@@ -121,7 +164,7 @@ export const idlFactory = ({ IDL }) => {
     'name' : IDL.Text,
     'createdAt' : IDL.Int,
     'role' : UserRole,
-    'phone' : PhoneNumber,
+    'phone' : IDL.Text,
   });
   const OrderStatus = IDL.Variant({
     'riderAssigned' : IDL.Null,
@@ -132,12 +175,19 @@ export const idlFactory = ({ IDL }) => {
   });
   const Order = IDL.Record({
     'id' : IDL.Int,
+    'customerName' : IDL.Text,
     'status' : OrderStatus,
+    'customerPhone' : IDL.Text,
+    'storeId' : IDL.Int,
     'createdAt' : IDL.Int,
+    'pinnedLongitude' : IDL.Float64,
+    'pinnedLatitude' : IDL.Float64,
+    'customerAddress' : IDL.Text,
     'itemName' : IDL.Text,
     'customerId' : IDL.Principal,
   });
   const Product = IDL.Record({
+    'storeId' : IDL.Int,
     'name' : IDL.Text,
     'createdAt' : IDL.Int,
     'description' : IDL.Text,
@@ -146,22 +196,52 @@ export const idlFactory = ({ IDL }) => {
     'image' : IDL.Text,
     'price' : IDL.Float64,
   });
+  const Store = IDL.Record({
+    'storeId' : IDL.Int,
+    'name' : IDL.Text,
+    'createdAt' : IDL.Int,
+    'description' : IDL.Text,
+    'isOpen' : IDL.Bool,
+    'deliveryTime' : IDL.Text,
+    'vendorId' : IDL.Principal,
+    'category' : IDL.Text,
+    'rating' : IDL.Float64,
+    'image' : IDL.Text,
+  });
   
   return IDL.Service({
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
     'addProduct' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Float64, IDL.Text],
+        [IDL.Int, IDL.Text, IDL.Text, IDL.Float64, IDL.Text],
         [IDL.Int],
         [],
       ),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole__1], [], []),
-    'createOrder' : IDL.Func([IDL.Text], [IDL.Int], []),
-    'createUserProfile' : IDL.Func([PhoneNumber, IDL.Text, UserRole], [], []),
+    'createOrder' : IDL.Func(
+        [
+          IDL.Int,
+          IDL.Text,
+          IDL.Text,
+          IDL.Text,
+          IDL.Text,
+          IDL.Float64,
+          IDL.Float64,
+        ],
+        [IDL.Int],
+        [],
+      ),
+    'createStore' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Int],
+        [],
+      ),
+    'createUserProfile' : IDL.Func([IDL.Text, IDL.Text, UserRole], [], []),
     'deleteProduct' : IDL.Func([IDL.Int], [], []),
-    'generateOtp' : IDL.Func([PhoneNumber], [IDL.Text], []),
+    'generateOtp' : IDL.Func([IDL.Text], [IDL.Text], []),
     'getAllCustomers' : IDL.Func([], [IDL.Vec(UserProfile)], ['query']),
     'getAllOrders' : IDL.Func([], [IDL.Vec(Order)], ['query']),
     'getAllProducts' : IDL.Func([], [IDL.Vec(Product)], ['query']),
+    'getAllStores' : IDL.Func([], [IDL.Vec(Store)], ['query']),
     'getAllUsers' : IDL.Func([], [IDL.Vec(UserProfile)], ['query']),
     'getAllVendors' : IDL.Func([], [IDL.Vec(UserProfile)], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
@@ -179,22 +259,30 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Vec(Product)],
         ['query'],
       ),
+    'getStoreById' : IDL.Func([IDL.Int], [IDL.Opt(Store)], ['query']),
+    'getStoreByVendor' : IDL.Func([IDL.Principal], [IDL.Opt(Store)], ['query']),
     'getUserProfile' : IDL.Func(
         [IDL.Principal],
         [IDL.Opt(UserProfile)],
         ['query'],
       ),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
-    'isNewUser' : IDL.Func([PhoneNumber], [IDL.Bool], ['query']),
+    'isNewUser' : IDL.Func([IDL.Text], [IDL.Bool], ['query']),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'toggleStoreOpen' : IDL.Func([IDL.Int], [IDL.Bool], []),
     'updateOrderStatus' : IDL.Func([IDL.Int, OrderStatus], [], []),
     'updateProduct' : IDL.Func(
         [IDL.Int, IDL.Text, IDL.Text, IDL.Float64, IDL.Text],
         [],
         [],
       ),
+    'updateStore' : IDL.Func(
+        [IDL.Int, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+        [],
+        [],
+      ),
     'updateUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
-    'verifyOtp' : IDL.Func([PhoneNumber, IDL.Text], [IDL.Bool], []),
+    'verifyOtp' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
   });
 };
 

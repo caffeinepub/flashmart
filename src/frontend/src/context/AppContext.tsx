@@ -9,7 +9,10 @@ export type AppScreen =
   | "customer-dashboard"
   | "vendor-dashboard"
   | "delivery-dashboard"
-  | "cart";
+  | "cart"
+  | "store-list"
+  | "store-detail"
+  | "create-store";
 
 interface AppContextType {
   screen: AppScreen;
@@ -20,6 +23,8 @@ interface AppContextType {
   setDemoOtp: (otp: string) => void;
   currentUser: UserProfile | null;
   setCurrentUser: (user: UserProfile | null) => void;
+  currentStoreId: bigint | null;
+  setCurrentStoreId: (id: bigint | null) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -29,6 +34,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [currentPhone, setCurrentPhone] = useState("");
   const [demoOtp, setDemoOtp] = useState("");
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [currentStoreId, setCurrentStoreId] = useState<bigint | null>(null);
 
   return (
     <AppContext.Provider
@@ -41,6 +47,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setDemoOtp,
         currentUser,
         setCurrentUser,
+        currentStoreId,
+        setCurrentStoreId,
       }}
     >
       {children}

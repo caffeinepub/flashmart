@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { OrderStatus, UserProfile } from "../backend";
+import type { OrderStatus, Store, UserProfile } from "../backend";
 import { useActor } from "./useActor";
 
 export function useCallerProfile() {
@@ -77,13 +77,30 @@ export function useCreateOrder() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (itemName: string) => {
+    mutationFn: async (params: {
+      storeId: bigint;
+      itemName: string;
+      customerName: string;
+      customerPhone: string;
+      customerAddress: string;
+      pinnedLatitude: number;
+      pinnedLongitude: number;
+    }) => {
       if (!actor) throw new Error("Not connected");
-      return actor.createOrder(itemName);
+      return actor.createOrder(
+        params.storeId,
+        params.itemName,
+        params.customerName,
+        params.customerPhone,
+        params.customerAddress,
+        params.pinnedLatitude,
+        params.pinnedLongitude,
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["myOrders"] });
       queryClient.invalidateQueries({ queryKey: ["allOrders"] });
+      queryClient.invalidateQueries({ queryKey: ["ordersByStatus"] });
     },
   });
 }
@@ -154,22 +171,25 @@ export function useAddProduct() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({
+      storeId,
       name,
       description,
       price,
       image,
     }: {
+      storeId: bigint;
       name: string;
       description: string;
       price: number;
       image: string;
     }) => {
       if (!actor) throw new Error("Not connected");
-      return actor.addProduct(name, description, price, image);
+      return actor.addProduct(storeId, name, description, price, image);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["allProducts"] });
       queryClient.invalidateQueries({ queryKey: ["vendorProducts"] });
+      queryClient.invalidateQueries({ queryKey: ["storeProducts"] });
     },
   });
 }
@@ -197,6 +217,7 @@ export function useUpdateProduct() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["allProducts"] });
       queryClient.invalidateQueries({ queryKey: ["vendorProducts"] });
+      queryClient.invalidateQueries({ queryKey: ["storeProducts"] });
     },
   });
 }
@@ -212,6 +233,121 @@ export function useDeleteProduct() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["allProducts"] });
       queryClient.invalidateQueries({ queryKey: ["vendorProducts"] });
+      queryClient.invalidateQueries({ queryKey: ["storeProducts"] });
+    },
+  });
+}
+
+// ── Store Queries ──────────────────────────────────────────────────────────
+
+export function useAllStores() {
+  const { actor, isFetching: actorFetching } = useActor();
+  return useQuery<Store[]>({
+    queryKey: ["allStores"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.getAllStores();
+    },
+    enabled: !!actor && !actorFetching,
+    refetchInterval: 10_000,
+  });
+}
+
+export function useStoreByVendor(vendorId: string | undefined) {
+  const { actor, isFetching: actorFetching } = useActor();
+  return useQuery<Store | null>({
+    queryKey: ["storeByVendor", vendorId],
+    queryFn: async () => {
+      if (!actor || !vendorId) return null;
+      const { Principal } = await import("@dfinity/principal");
+      return actor.getStoreByVendor(Principal.fromText(vendorId));
+    },
+    enabled: !!actor && !actorFetching && !!vendorId,
+    retry: false,
+  });
+}
+
+export function useStoreById(storeId: bigint | null) {
+  const { actor, isFetching: actorFetching } = useActor();
+  return useQuery<Store | null>({
+    queryKey: ["storeById", storeId?.toString()],
+    queryFn: async () => {
+      if (!actor || storeId === null) return null;
+      return actor.getStoreById(storeId);
+    },
+    enabled: !!actor && !actorFetching && storeId !== null,
+  });
+}
+
+export function useCreateStore() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      name: string;
+      image: string;
+      category: string;
+      description: string;
+      deliveryTime: string;
+    }) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.createStore(
+        params.name,
+        params.image,
+        params.category,
+        params.description,
+        params.deliveryTime,
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["allStores"] });
+      queryClient.invalidateQueries({ queryKey: ["storeByVendor"] });
+    },
+  });
+}
+
+export function useToggleStoreOpen() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (storeId: bigint) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.toggleStoreOpen(storeId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["allStores"] });
+      queryClient.invalidateQueries({ queryKey: ["storeByVendor"] });
+      queryClient.invalidateQueries({ queryKey: ["storeById"] });
+    },
+  });
+}
+
+export function useUpdateStore() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      storeId: bigint;
+      name: string;
+      image: string;
+      category: string;
+      description: string;
+      deliveryTime: string;
+    }) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.updateStore(
+        params.storeId,
+        params.name,
+        params.image,
+        params.category,
+        params.description,
+        params.deliveryTime,
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["allStores"] });
+      queryClient.invalidateQueries({ queryKey: ["storeByVendor"] });
+      queryClient.invalidateQueries({ queryKey: ["storeById"] });
     },
   });
 }

@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 // Leaflet loaded via CDN at runtime to avoid bundler dependency
 declare global {
   interface Window {
-    // biome-ignore lint/suspicious/noExplicitAny: Leaflet global loaded from CDN
     L: any;
   }
 }
@@ -58,9 +57,7 @@ export default function MapPickerModal({
   onClose,
 }: Props) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  // biome-ignore lint/suspicious/noExplicitAny: Leaflet map/marker objects from CDN
   const mapRef = useRef<any>(null);
-  // biome-ignore lint/suspicious/noExplicitAny: Leaflet marker object from CDN
   const markerRef = useRef<any>(null);
   const [pin, setPin] = useState<{ lat: number; lng: number } | null>(
     initialLat && initialLng ? { lat: initialLat, lng: initialLng } : null,

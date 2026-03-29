@@ -12,8 +12,10 @@ import {
   LogOut,
   Package,
   PackagePlus,
+  Power,
   RefreshCw,
   Save,
+  Store,
   Trash2,
   X,
   XCircle,
@@ -30,6 +32,8 @@ import {
   useAllProducts,
   useDeleteProduct,
   useOrdersByStatus,
+  useStoreByVendor,
+  useToggleStoreOpen,
   useUpdateOrderStatus,
   useUpdateProduct,
   useVendorProducts,
@@ -208,9 +212,11 @@ function EditProductCard({
 }
 
 function ManageProductsSection({
+  storeId,
   vendorId,
   onConfirm,
 }: {
+  storeId: bigint;
   vendorId: string;
   onConfirm: (message: string, action: () => void) => void;
 }) {
@@ -246,6 +252,7 @@ function ManageProductsSection({
     setFormError("");
     try {
       await addProduct.mutateAsync({
+        storeId,
         name: form.name.trim(),
         description: form.description.trim(),
         price: Number(form.price),
@@ -468,6 +475,14 @@ function isOrderExpiredLocally(orderId: string): boolean {
 export default function VendorDashboard() {
   const { currentUser, navigate } = useApp();
   const { addNotification } = useNotifications();
+  const vendorId = currentUser?.id?.toString() || "anonymous";
+
+  // ── Store check ──────────────────────────────────────────────────────────────
+  const { data: store, isLoading: storeLoading } = useStoreByVendor(
+    vendorId === "anonymous" ? undefined : vendorId,
+  );
+  const toggleStore = useToggleStoreOpen();
+
   const {
     data: requestedOrders = [],
     isLoading,
@@ -492,7 +507,7 @@ export default function VendorDashboard() {
     action: (() => void) | null;
   }>({ open: false, message: "", action: null });
 
-  // ── Sound + notification state ──────────────────────────────────────────
+  // ── Sound + notification state ─────────────────────────────────────────────
   const orderSound = useRef(
     new Audio("https://www.soundjay.com/buttons/sounds/button-3.mp3"),
   );
@@ -525,7 +540,6 @@ export default function VendorDashboard() {
         const stored = localStorage.getItem("flashmart_expired_orders");
         if (stored) {
           const ids = new Set<string>(JSON.parse(stored));
-          // also check orders that may have newly expired
           for (const order of requestedOrders) {
             const idStr = order.id.toString();
             if (!ids.has(idStr) && isOrderExpiredLocally(idStr)) {
@@ -625,7 +639,15 @@ export default function VendorDashboard() {
     navigate("landing");
   };
 
-  const vendorId = currentUser?.id?.toString() || "anonymous";
+  const handleToggleStore = async () => {
+    if (!store) return;
+    try {
+      const isOpen = await toggleStore.mutateAsync(store.storeId);
+      toast.success(isOpen ? "Store is now Open" : "Store is now Closed");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to toggle store.");
+    }
+  };
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -703,13 +725,110 @@ export default function VendorDashboard() {
         </div>
       </div>
 
-      {/* ── Manage Products ── */}
-      <ManageProductsSection
-        vendorId={vendorId}
-        onConfirm={handleOpenConfirm}
-      />
+      {/* ── Store Section ── */}
+      {storeLoading ? (
+        <div className="flex items-center gap-2 text-gray-500 text-sm py-6">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading store info...
+        </div>
+      ) : !store ? (
+        /* No store — show Create CTA */
+        <Card
+          className="mb-8 border-dashed border-2 border-green-300 bg-green-50"
+          data-ocid="vendor.create_store.card"
+        >
+          <CardContent className="py-8 flex flex-col items-center gap-4">
+            <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center">
+              <Store className="w-8 h-8 text-green-500" />
+            </div>
+            <div className="text-center">
+              <h2 className="text-lg font-extrabold text-gray-900">
+                Create Your Store
+              </h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Set up your store to start selling to local customers
+              </p>
+            </div>
+            <Button
+              onClick={() => navigate("create-store")}
+              className="bg-green-500 hover:bg-green-600 text-white font-bold px-8 rounded-xl"
+              data-ocid="vendor.create_store.primary_button"
+            >
+              <Store className="w-4 h-4 mr-2" />
+              Create Store
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        /* Has store — show store header */
+        <>
+          <Card
+            className="mb-6 border-green-200 bg-green-50/50"
+            data-ocid="vendor.store.card"
+          >
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    {store.image ? (
+                      <img
+                        src={store.image}
+                        alt={store.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    ) : (
+                      <Store className="w-6 h-6 text-green-500" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-extrabold text-sm text-gray-900">
+                      {store.name}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {store.category} · {store.deliveryTime}
+                    </p>
+                    <Badge
+                      className={`mt-1 text-[10px] ${
+                        store.isOpen
+                          ? "bg-green-500 text-white border-0"
+                          : "bg-gray-200 text-gray-600 border-0"
+                      }`}
+                    >
+                      {store.isOpen ? "OPEN" : "CLOSED"}
+                    </Badge>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleToggleStore}
+                  disabled={toggleStore.isPending}
+                  className={`gap-1.5 text-xs font-bold ${
+                    store.isOpen
+                      ? "border-red-200 text-red-600 hover:bg-red-50"
+                      : "border-green-200 text-green-600 hover:bg-green-50"
+                  }`}
+                  data-ocid="vendor.store.toggle"
+                >
+                  <Power className="w-3.5 h-3.5" />
+                  {store.isOpen ? "Close Store" : "Open Store"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* Incoming Orders */}
+          {/* Manage Products (only when store exists) */}
+          <ManageProductsSection
+            storeId={store.storeId}
+            vendorId={vendorId}
+            onConfirm={handleOpenConfirm}
+          />
+        </>
+      )}
+
+      {/* Incoming Orders (always visible) */}
       <div className="mb-8">
         <h2 className="text-base font-semibold text-foreground mb-3 flex items-center gap-2">
           <Package className="w-4 h-4 text-primary" />
@@ -760,6 +879,11 @@ export default function VendorDashboard() {
                         <p className="text-xs text-muted-foreground mt-0.5">
                           Order #{order.id.toString()}
                         </p>
+                        {order.customerName && (
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            Customer: {order.customerName}
+                          </p>
+                        )}
                         <Badge
                           variant="outline"
                           className="mt-1.5 text-xs bg-warning/10 text-warning border-warning/20"

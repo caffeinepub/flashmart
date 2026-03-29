@@ -6,6 +6,7 @@ import {
   Navigation,
   Plus,
   ShoppingCart,
+  Store,
   Trash2,
   User,
 } from "lucide-react";
@@ -16,7 +17,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import MapPickerModal from "../components/MapPickerModal";
 import { useApp } from "../context/AppContext";
 import { useCart } from "../context/CartContext";
-import { useCreateOrder } from "../hooks/useQueries";
+import { useCreateOrder, useStoreById } from "../hooks/useQueries";
 
 interface CustomerDetails {
   name: string;
@@ -33,10 +34,6 @@ const DELIVERY_ZONE = [
   { lat: 17.3365, lng: 78.5472 },
 ];
 
-/**
- * Ray-casting point-in-polygon algorithm.
- * Polygon is automatically closed.
- */
 function isPointInPolygon(
   lat: number,
   lng: number,
@@ -57,10 +54,18 @@ function isPointInPolygon(
 }
 
 export default function CartPage() {
-  const { items, increaseQty, decreaseQty, removeItem, clearCart, totalPrice } =
-    useCart();
+  const {
+    items,
+    increaseQty,
+    decreaseQty,
+    removeItem,
+    clearCart,
+    totalPrice,
+    currentStoreId,
+  } = useCart();
   const { navigate } = useApp();
   const createOrder = useCreateOrder();
+  const { data: store } = useStoreById(currentStoreId);
   const [confirmModal, setConfirmModal] = useState<{
     open: boolean;
     message: string;
@@ -84,7 +89,6 @@ export default function CartPage() {
     Partial<CustomerDetails & { pin: string }>
   >({});
 
-  // Check pinned location against delivery zone (ISSUE 3 FIX)
   const zoneStatus = useMemo(() => {
     if (!pinnedLocation) return "no_pin";
     const inside = isPointInPolygon(
@@ -95,7 +99,7 @@ export default function CartPage() {
     return inside ? "in_range" : "out_of_range";
   }, [pinnedLocation]);
 
-  const canOrder = zoneStatus === "in_range";
+  const canOrder = zoneStatus === "in_range" && currentStoreId !== null;
 
   const handleFieldChange = (field: keyof CustomerDetails, value: string) => {
     setCustomer((prev) => ({ ...prev, [field]: value }));
@@ -111,6 +115,8 @@ export default function CartPage() {
     if (!customer.address.trim()) errors.address = "Address is required";
     if (!pinnedLocation)
       errors.pin = "Please pin your delivery location on the map";
+    if (!currentStoreId)
+      errors.pin = "No store selected — go back and shop from a store";
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -119,7 +125,6 @@ export default function CartPage() {
     setPinnedLocation({ lat, lng });
     setMapOpen(false);
     setFormErrors((prev) => ({ ...prev, pin: undefined }));
-    // Notify user about zone status after pinning
     const inside = isPointInPolygon(lat, lng, DELIVERY_ZONE);
     if (inside) {
       toast.success("Location pinned! Delivery available ✅");
@@ -135,7 +140,11 @@ export default function CartPage() {
       return;
     }
     if (!canOrder) {
-      toast.error("Your pinned location is outside the delivery zone.");
+      if (!currentStoreId) {
+        toast.error("No store selected. Go back and shop from a store.");
+      } else {
+        toast.error("Your pinned location is outside the delivery zone.");
+      }
       return;
     }
     const summary = items.map((i) => `${i.name} x${i.quantity}`).join(", ");
@@ -145,15 +154,15 @@ export default function CartPage() {
       action: async () => {
         try {
           localStorage.setItem("flashmart_customer", JSON.stringify(customer));
-          const orderPayload = JSON.stringify({
+          const newOrderId = await createOrder.mutateAsync({
+            storeId: currentStoreId!,
+            itemName: summary,
             customerName: customer.name.trim(),
             customerPhone: customer.phone.trim(),
             customerAddress: customer.address.trim(),
             pinnedLatitude: pinnedLocation!.lat,
             pinnedLongitude: pinnedLocation!.lng,
-            items: summary,
           });
-          const newOrderId = await createOrder.mutateAsync(orderPayload);
           // Store createdAt timestamp for expiry logic
           try {
             const timestamps: Record<string, number> = JSON.parse(
@@ -163,15 +172,6 @@ export default function CartPage() {
             localStorage.setItem(
               "flashmart_order_timestamps",
               JSON.stringify(timestamps),
-            );
-            // Store items for reorder
-            const orderItems: Record<string, string> = JSON.parse(
-              localStorage.getItem("flashmart_order_items") || "{}",
-            );
-            orderItems[newOrderId.toString()] = summary;
-            localStorage.setItem(
-              "flashmart_order_items",
-              JSON.stringify(orderItems),
             );
           } catch {}
           clearCart();
@@ -248,7 +248,9 @@ export default function CartPage() {
       <div className="flex items-center gap-3 mb-6">
         <button
           type="button"
-          onClick={() => navigate("customer-dashboard")}
+          onClick={() =>
+            navigate(currentStoreId ? "store-detail" : "store-list")
+          }
           className="text-sm font-semibold text-primary hover:underline"
         >
           ← Back
@@ -259,18 +261,27 @@ export default function CartPage() {
         </h1>
       </div>
 
+      {/* Store Banner */}
+      {store && (
+        <div className="mb-4 flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2">
+          <Store className="w-4 h-4 text-green-600 flex-shrink-0" />
+          <span className="text-sm font-semibold text-green-700">
+            Shopping from: <strong>{store.name}</strong>
+          </span>
+        </div>
+      )}
+
       {items.length === 0 ? (
         <div className="text-center py-16 text-gray-500">
           <ShoppingCart className="w-12 h-12 mx-auto mb-3 text-gray-300" />
           <p className="font-semibold">Your cart is empty</p>
-          <p className="text-sm mt-1">
-            Add items from the shop to get started.
-          </p>
+          <p className="text-sm mt-1">Add items from a store to get started.</p>
           <Button
             className="mt-4 bg-green-500 hover:bg-green-600 text-white font-bold"
-            onClick={() => navigate("customer-dashboard")}
+            onClick={() => navigate("store-list")}
+            data-ocid="cart.browse.button"
           >
-            Browse Products
+            Browse Stores
           </Button>
         </div>
       ) : (
@@ -330,6 +341,7 @@ export default function CartPage() {
                           onClick={() => removeItem(item.id)}
                           className="text-red-400 hover:text-red-600 transition-colors ml-1"
                           aria-label="Remove item"
+                          data-ocid="cart.remove.button"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -376,9 +388,15 @@ export default function CartPage() {
                       ? "border-red-400 bg-red-50"
                       : "border-gray-300 bg-white"
                   }`}
+                  data-ocid="cart.name.input"
                 />
                 {formErrors.name && (
-                  <p className="text-xs text-red-500 mt-1">{formErrors.name}</p>
+                  <p
+                    className="text-xs text-red-500 mt-1"
+                    data-ocid="cart.name_error"
+                  >
+                    {formErrors.name}
+                  </p>
                 )}
               </div>
 
@@ -401,9 +419,13 @@ export default function CartPage() {
                       ? "border-red-400 bg-red-50"
                       : "border-gray-300 bg-white"
                   }`}
+                  data-ocid="cart.phone.input"
                 />
                 {formErrors.phone && (
-                  <p className="text-xs text-red-500 mt-1">
+                  <p
+                    className="text-xs text-red-500 mt-1"
+                    data-ocid="cart.phone_error"
+                  >
                     {formErrors.phone}
                   </p>
                 )}
@@ -428,9 +450,13 @@ export default function CartPage() {
                       ? "border-red-400 bg-red-50"
                       : "border-gray-300 bg-white"
                   }`}
+                  data-ocid="cart.address.textarea"
                 />
                 {formErrors.address && (
-                  <p className="text-xs text-red-500 mt-1">
+                  <p
+                    className="text-xs text-red-500 mt-1"
+                    data-ocid="cart.address_error"
+                  >
                     {formErrors.address}
                   </p>
                 )}
@@ -468,6 +494,7 @@ export default function CartPage() {
                       type="button"
                       onClick={() => setMapOpen(true)}
                       className="w-full text-xs font-bold text-blue-600 border border-blue-200 rounded-lg px-3 py-2 hover:bg-blue-50 transition-colors"
+                      data-ocid="cart.change_location.button"
                     >
                       Change Location
                     </button>
@@ -478,12 +505,18 @@ export default function CartPage() {
                       type="button"
                       onClick={() => setMapOpen(true)}
                       className="w-full h-10 font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 justify-center"
+                      data-ocid="cart.pin_location.button"
                     >
                       <Navigation className="w-4 h-4" />
                       Pin Location on Map
                     </Button>
                     {formErrors.pin && (
-                      <p className="text-xs text-red-500">{formErrors.pin}</p>
+                      <p
+                        className="text-xs text-red-500"
+                        data-ocid="cart.pin_error"
+                      >
+                        {formErrors.pin}
+                      </p>
                     )}
                   </div>
                 )}
@@ -493,6 +526,16 @@ export default function CartPage() {
 
           {/* Zone Banner */}
           {zoneBanner()}
+
+          {/* No store warning */}
+          {!currentStoreId && (
+            <div className="mb-3 flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+              <Store className="w-4 h-4 text-orange-500" />
+              <span className="text-sm font-semibold text-orange-700">
+                No store selected — go back and shop from a store
+              </span>
+            </div>
+          )}
 
           <Button
             onClick={handlePlaceOrder}

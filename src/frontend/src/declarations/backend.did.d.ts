@@ -12,8 +12,14 @@ import type { Principal } from '@icp-sdk/core/principal';
 
 export interface Order {
   'id' : bigint,
+  'customerName' : string,
   'status' : OrderStatus,
+  'customerPhone' : string,
+  'storeId' : bigint,
   'createdAt' : bigint,
+  'pinnedLongitude' : number,
+  'pinnedLatitude' : number,
+  'customerAddress' : string,
   'itemName' : string,
   'customerId' : Principal,
 }
@@ -22,8 +28,8 @@ export type OrderStatus = { 'riderAssigned' : null } |
   { 'storeConfirmed' : null } |
   { 'pickedUp' : null } |
   { 'delivered' : null };
-export type PhoneNumber = string;
 export interface Product {
+  'storeId' : bigint,
   'name' : string,
   'createdAt' : bigint,
   'description' : string,
@@ -32,12 +38,24 @@ export interface Product {
   'image' : string,
   'price' : number,
 }
+export interface Store {
+  'storeId' : bigint,
+  'name' : string,
+  'createdAt' : bigint,
+  'description' : string,
+  'isOpen' : boolean,
+  'deliveryTime' : string,
+  'vendorId' : Principal,
+  'category' : string,
+  'rating' : number,
+  'image' : string,
+}
 export interface UserProfile {
   'id' : Principal,
   'name' : string,
   'createdAt' : bigint,
   'role' : UserRole,
-  'phone' : PhoneNumber,
+  'phone' : string,
 }
 export type UserRole = { 'admin' : null } |
   { 'customer' : null } |
@@ -48,15 +66,20 @@ export type UserRole__1 = { 'admin' : null } |
   { 'guest' : null };
 export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
-  'addProduct' : ActorMethod<[string, string, number, string], bigint>,
+  'addProduct' : ActorMethod<[bigint, string, string, number, string], bigint>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole__1], undefined>,
-  'createOrder' : ActorMethod<[string], bigint>,
-  'createUserProfile' : ActorMethod<[PhoneNumber, string, UserRole], undefined>,
+  'createOrder' : ActorMethod<
+    [bigint, string, string, string, string, number, number],
+    bigint
+  >,
+  'createStore' : ActorMethod<[string, string, string, string, string], bigint>,
+  'createUserProfile' : ActorMethod<[string, string, UserRole], undefined>,
   'deleteProduct' : ActorMethod<[bigint], undefined>,
-  'generateOtp' : ActorMethod<[PhoneNumber], string>,
+  'generateOtp' : ActorMethod<[string], string>,
   'getAllCustomers' : ActorMethod<[], Array<UserProfile>>,
   'getAllOrders' : ActorMethod<[], Array<Order>>,
   'getAllProducts' : ActorMethod<[], Array<Product>>,
+  'getAllStores' : ActorMethod<[], Array<Store>>,
   'getAllUsers' : ActorMethod<[], Array<UserProfile>>,
   'getAllVendors' : ActorMethod<[], Array<UserProfile>>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
@@ -66,17 +89,24 @@ export interface _SERVICE {
   'getOrdersByCustomer' : ActorMethod<[Principal], Array<Order>>,
   'getOrdersByStatus' : ActorMethod<[OrderStatus], Array<Order>>,
   'getProductsByVendor' : ActorMethod<[Principal], Array<Product>>,
+  'getStoreById' : ActorMethod<[bigint], [] | [Store]>,
+  'getStoreByVendor' : ActorMethod<[Principal], [] | [Store]>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
-  'isNewUser' : ActorMethod<[PhoneNumber], boolean>,
+  'isNewUser' : ActorMethod<[string], boolean>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'toggleStoreOpen' : ActorMethod<[bigint], boolean>,
   'updateOrderStatus' : ActorMethod<[bigint, OrderStatus], undefined>,
   'updateProduct' : ActorMethod<
     [bigint, string, string, number, string],
     undefined
   >,
+  'updateStore' : ActorMethod<
+    [bigint, string, string, string, string, string],
+    undefined
+  >,
   'updateUserRole' : ActorMethod<[Principal, UserRole], undefined>,
-  'verifyOtp' : ActorMethod<[PhoneNumber, string], boolean>,
+  'verifyOtp' : ActorMethod<[string, string], boolean>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];
