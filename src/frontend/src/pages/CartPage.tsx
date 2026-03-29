@@ -18,39 +18,16 @@ import MapPickerModal from "../components/MapPickerModal";
 import { useApp } from "../context/AppContext";
 import { useCart } from "../context/CartContext";
 import { useCreateOrder, useStoreById } from "../hooks/useQueries";
+import {
+  GLOBAL_DELIVERY_ZONE,
+  getEffectiveZone,
+  isPointInPolygon,
+} from "../utils/geofence";
 
 interface CustomerDetails {
   name: string;
   phone: string;
   address: string;
-}
-
-// Delivery zone polygon
-const DELIVERY_ZONE = [
-  { lat: 17.3448, lng: 78.5458 },
-  { lat: 17.3462, lng: 78.5595 },
-  { lat: 17.3368, lng: 78.5708 },
-  { lat: 17.332, lng: 78.5602 },
-  { lat: 17.3365, lng: 78.5472 },
-];
-
-function isPointInPolygon(
-  lat: number,
-  lng: number,
-  polygon: { lat: number; lng: number }[],
-): boolean {
-  let inside = false;
-  const n = polygon.length;
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    const xi = polygon[i].lng;
-    const yi = polygon[i].lat;
-    const xj = polygon[j].lng;
-    const yj = polygon[j].lat;
-    const intersect =
-      yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
-    if (intersect) inside = !inside;
-  }
-  return inside;
 }
 
 export default function CartPage() {
@@ -66,6 +43,7 @@ export default function CartPage() {
   const { navigate } = useApp();
   const createOrder = useCreateOrder();
   const { data: store } = useStoreById(currentStoreId);
+  const effectiveZone = store ? getEffectiveZone(store) : GLOBAL_DELIVERY_ZONE;
   const [confirmModal, setConfirmModal] = useState<{
     open: boolean;
     message: string;
@@ -94,10 +72,10 @@ export default function CartPage() {
     const inside = isPointInPolygon(
       pinnedLocation.lat,
       pinnedLocation.lng,
-      DELIVERY_ZONE,
+      effectiveZone,
     );
     return inside ? "in_range" : "out_of_range";
-  }, [pinnedLocation]);
+  }, [pinnedLocation, effectiveZone]);
 
   const canOrder = zoneStatus === "in_range" && currentStoreId !== null;
 
@@ -125,7 +103,7 @@ export default function CartPage() {
     setPinnedLocation({ lat, lng });
     setMapOpen(false);
     setFormErrors((prev) => ({ ...prev, pin: undefined }));
-    const inside = isPointInPolygon(lat, lng, DELIVERY_ZONE);
+    const inside = isPointInPolygon(lat, lng, effectiveZone);
     if (inside) {
       toast.success("Location pinned! Delivery available ✅");
     } else {
@@ -242,6 +220,7 @@ export default function CartPage() {
         initialLng={pinnedLocation?.lng}
         onConfirm={handlePinConfirm}
         onClose={() => setMapOpen(false)}
+        deliveryZone={effectiveZone}
       />
 
       {/* Header */}
@@ -466,6 +445,11 @@ export default function CartPage() {
               <div>
                 <p className="block text-xs font-bold text-gray-700 mb-1">
                   Pinned Location <span className="text-red-500">*</span>
+                </p>
+                <p className="text-[11px] text-gray-400 mb-2">
+                  {store?.useCustomZone
+                    ? "This store has a custom delivery zone"
+                    : "Standard delivery zone applies"}
                 </p>
                 {pinnedLocation ? (
                   <div className="space-y-2">

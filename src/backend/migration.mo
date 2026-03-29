@@ -1,84 +1,10 @@
 import Map "mo:core/Map";
-import List "mo:core/List";
+import Nat "mo:core/Nat";
 import Principal "mo:core/Principal";
-import Float "mo:core/Float";
 
 module {
-  type OldUserRole = {
-    #customer;
-    #store;
-    #deliveryP;
-    #admin;
-  };
-
-  type OldProduct = {
-    productId : Int;
-    name : Text;
-    description : Text;
-    price : Float;
-    image : Text;
-    vendorId : Principal;
-    createdAt : Int;
-  };
-
-  type OldUserProfile = {
-    id : Principal;
-    phone : Text;
-    name : Text;
-    role : OldUserRole;
-    createdAt : Int;
-  };
-
-  type OldOTP = {
-    code : Text;
-    expiresAt : Int;
-    verified : Bool;
-  };
-
-  type OldOrderStatus = {
-    #requested;
-    #storeConfirmed;
-    #riderAssigned;
-    #pickedUp;
-    #delivered;
-  };
-
-  type OldOrder = {
-    id : Int;
-    itemName : Text;
-    customerId : Principal;
-    status : OldOrderStatus;
-    createdAt : Int;
-  };
-
-  type OldActor = {
-    users : Map.Map<Principal, OldUserProfile>;
-    products : Map.Map<Int, OldProduct>;
-    otps : Map.Map<Text, OldOTP>;
-    orders : Map.Map<Int, OldOrder>;
-    nextOrderId : Nat;
-    nextProductId : Nat;
-  };
-
-  type NewUserRole = {
-    #customer;
-    #store;
-    #deliveryP;
-    #admin;
-  };
-
-  type NewProduct = {
-    productId : Int;
-    storeId : Int;
-    name : Text;
-    description : Text;
-    price : Float;
-    image : Text;
-    vendorId : Principal;
-    createdAt : Int;
-  };
-
-  type NewStore = {
+  // Old types without new fields
+  type OldStore = {
     storeId : Int;
     name : Text;
     image : Text;
@@ -91,96 +17,57 @@ module {
     createdAt : Int;
   };
 
-  type NewUserProfile = {
-    id : Principal;
-    phone : Text;
-    name : Text;
-    role : NewUserRole;
-    createdAt : Int;
+  type OldActor = {
+    stores : Map.Map<Int, OldStore>;
+    users : Map.Map<Principal, { id : Principal; phone : Text; name : Text; role : { #customer; #store; #deliveryP; #admin }; createdAt : Int }>;
+    products : Map.Map<Int, { productId : Int; storeId : Int; name : Text; description : Text; price : Float; image : Text; vendorId : Principal; createdAt : Int }>;
+    otps : Map.Map<Text, { code : Text; expiresAt : Int; verified : Bool }>;
+    orders : Map.Map<Int, { id : Int; storeId : Int; itemName : Text; customerName : Text; customerPhone : Text; customerAddress : Text; pinnedLatitude : Float; pinnedLongitude : Float; customerId : Principal; status : { #requested; #storeConfirmed; #riderAssigned; #pickedUp; #delivered }; createdAt : Int }>;
+    nextOrderId : Nat;
+    nextProductId : Nat;
+    nextStoreId : Nat;
   };
 
-  type NewOTP = {
-    code : Text;
-    expiresAt : Int;
-    verified : Bool;
-  };
-
-  type NewOrderStatus = {
-    #requested;
-    #storeConfirmed;
-    #riderAssigned;
-    #pickedUp;
-    #delivered;
-  };
-
-  type NewOrder = {
-    id : Int;
+  // New type with additional fields
+  type NewStore = {
     storeId : Int;
-    itemName : Text;
-    customerName : Text;
-    customerPhone : Text;
-    customerAddress : Text;
-    pinnedLatitude : Float;
-    pinnedLongitude : Float;
-    customerId : Principal;
-    status : NewOrderStatus;
+    name : Text;
+    image : Text;
+    category : Text;
+    description : Text;
+    deliveryTime : Text;
+    vendorId : Principal;
+    isOpen : Bool;
+    rating : Float;
     createdAt : Int;
+    useCustomZone : Bool;
+    customDeliveryZone : [(Float, Float)];
   };
 
   type NewActor = {
-    users : Map.Map<Principal, NewUserProfile>;
-    products : Map.Map<Int, NewProduct>;
     stores : Map.Map<Int, NewStore>;
-    otps : Map.Map<Text, NewOTP>;
-    orders : Map.Map<Int, NewOrder>;
+    users : Map.Map<Principal, { id : Principal; phone : Text; name : Text; role : { #customer; #store; #deliveryP; #admin }; createdAt : Int }>;
+    products : Map.Map<Int, { productId : Int; storeId : Int; name : Text; description : Text; price : Float; image : Text; vendorId : Principal; createdAt : Int }>;
+    otps : Map.Map<Text, { code : Text; expiresAt : Int; verified : Bool }>;
+    orders : Map.Map<Int, { id : Int; storeId : Int; itemName : Text; customerName : Text; customerPhone : Text; customerAddress : Text; pinnedLatitude : Float; pinnedLongitude : Float; customerId : Principal; status : { #requested; #storeConfirmed; #riderAssigned; #pickedUp; #delivered }; createdAt : Int }>;
     nextOrderId : Nat;
     nextProductId : Nat;
     nextStoreId : Nat;
   };
 
   public func run(old : OldActor) : NewActor {
-    let newProducts = old.products.map<Int, OldProduct, NewProduct>(
-      func(_id, oldProduct) {
+    let newStores = old.stores.map<Int, OldStore, NewStore>(
+      func(_id, oldStore) {
         {
-          productId = oldProduct.productId;
-          storeId = 0;
-          name = oldProduct.name;
-          description = oldProduct.description;
-          price = oldProduct.price;
-          image = oldProduct.image;
-          vendorId = oldProduct.vendorId;
-          createdAt = oldProduct.createdAt;
+          oldStore with
+          useCustomZone = false;
+          customDeliveryZone = ([] : [(Float, Float)]);
         };
       }
     );
-
-    let newOrders = old.orders.map<Int, OldOrder, NewOrder>(
-      func(_id, oldOrder) {
-        {
-          id = oldOrder.id;
-          storeId = 0;
-          itemName = oldOrder.itemName;
-          customerName = "";
-          customerPhone = "";
-          customerAddress = "";
-          pinnedLatitude = 0.0;
-          pinnedLongitude = 0.0;
-          customerId = oldOrder.customerId;
-          status = oldOrder.status;
-          createdAt = oldOrder.createdAt;
-        };
-      }
-    );
-
-    { 
-      users = old.users;
-      products = newProducts;
-      otps = old.otps;
-      orders = newOrders;
-      nextOrderId = old.nextOrderId;
-      nextProductId = old.nextProductId;
-      stores = Map.empty<Int, NewStore>();
-      nextStoreId = 1;
+    {
+      old with
+      stores = newStores;
     };
   };
 };

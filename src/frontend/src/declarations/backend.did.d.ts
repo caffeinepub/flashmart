@@ -39,6 +39,7 @@ export interface Product {
   'price' : number,
 }
 export interface Store {
+  'customDeliveryZone' : Array<[number, number]>,
   'storeId' : bigint,
   'name' : string,
   'createdAt' : bigint,
@@ -49,6 +50,7 @@ export interface Store {
   'category' : string,
   'rating' : number,
   'image' : string,
+  'useCustomZone' : boolean,
 }
 export interface UserProfile {
   'id' : Principal,
@@ -95,6 +97,10 @@ export interface _SERVICE {
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'isNewUser' : ActorMethod<[string], boolean>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'setStoreDeliveryZone' : ActorMethod<
+    [bigint, Array<[number, number]>, boolean],
+    undefined
+  >,
   'toggleStoreOpen' : ActorMethod<[bigint], boolean>,
   'updateOrderStatus' : ActorMethod<[bigint, OrderStatus], undefined>,
   'updateProduct' : ActorMethod<

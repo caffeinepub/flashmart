@@ -303,3 +303,89 @@ export function saveRecentSearch(query: string): void {
 export function clearRecentSearches(): void {
   localStorage.removeItem(RECENT_KEY);
 }
+
+// ─────────────────────────────────────────────
+// Store search utilities
+// ─────────────────────────────────────────────
+import type { Store } from "../backend";
+
+const FAST_DELIVERY_WORDS = [
+  "fast",
+  "quick",
+  "speedy",
+  "express",
+  "10 min",
+  "15 min",
+  "instant",
+];
+
+export function scoreStore(store: Store, parsed: ParsedQuery): number {
+  if (!parsed.rawQuery.trim()) return 1;
+  const name = store.name.toLowerCase();
+  const cat = store.category.toLowerCase();
+  const desc = store.description.toLowerCase();
+  const delivery = store.deliveryTime.toLowerCase();
+  let score = 0;
+
+  const q = parsed.rawQuery.toLowerCase();
+  if (name.includes(q)) score += 15;
+  else if (parsed.keywords.some((kw) => name.includes(kw))) score += 8;
+  if (parsed.keywords.some((kw) => cat.includes(kw))) score += 10;
+  if (parsed.keywords.some((kw) => desc.includes(kw))) score += 5;
+  if (FAST_DELIVERY_WORDS.some((w) => q.includes(w)) || q.includes("fast")) {
+    if (FAST_DELIVERY_WORDS.some((w) => delivery.includes(w))) score += 6;
+  }
+  for (const [, catWords] of Object.entries(CATEGORY_KEYWORDS)) {
+    if (
+      catWords.some(
+        (cw) =>
+          parsed.keywords.includes(cw) ||
+          parsed.rawQuery.toLowerCase().includes(cw),
+      )
+    ) {
+      if (
+        catWords.some(
+          (cw) => cat.includes(cw) || name.includes(cw) || desc.includes(cw),
+        )
+      ) {
+        score += 8;
+        break;
+      }
+    }
+  }
+  if (score === 0) return 0;
+  if (store.isOpen) score += 20;
+  score += store.rating * 2;
+  return score;
+}
+
+export function filterAndRankStores(stores: Store[], query: string): Store[] {
+  if (!query.trim()) {
+    return [...stores].sort((a, b) => {
+      if (a.isOpen !== b.isOpen) return a.isOpen ? -1 : 1;
+      return b.rating - a.rating;
+    });
+  }
+  const parsed = parseQuery(query);
+  const scored = stores
+    .map((s) => ({ store: s, score: scoreStore(s, parsed) }))
+    .filter(({ score }) => score > 0);
+  scored.sort((a, b) => b.score - a.score);
+  return scored.map(({ store }) => store);
+}
+
+export function getGlobalSuggestions(
+  products: Product[],
+  stores: Store[],
+  query: string,
+): string[] {
+  if (!query.trim() || query.length < 2) return [];
+  const lower = query.toLowerCase();
+  const productNames = products
+    .filter((p) => p.name.toLowerCase().includes(lower))
+    .map((p) => p.name);
+  const storeNames = stores
+    .filter((s) => s.name.toLowerCase().includes(lower))
+    .map((s) => s.name);
+  return [...new Set([...productNames, ...storeNames])].slice(0, 6);
+}

@@ -57,6 +57,7 @@ export const Product = IDL.Record({
   'price' : IDL.Float64,
 });
 export const Store = IDL.Record({
+  'customDeliveryZone' : IDL.Vec(IDL.Tuple(IDL.Float64, IDL.Float64)),
   'storeId' : IDL.Int,
   'name' : IDL.Text,
   'createdAt' : IDL.Int,
@@ -67,6 +68,7 @@ export const Store = IDL.Record({
   'category' : IDL.Text,
   'rating' : IDL.Float64,
   'image' : IDL.Text,
+  'useCustomZone' : IDL.Bool,
 });
 
 export const idlService = IDL.Service({
@@ -129,6 +131,11 @@ export const idlService = IDL.Service({
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'isNewUser' : IDL.Func([IDL.Text], [IDL.Bool], ['query']),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+  'setStoreDeliveryZone' : IDL.Func(
+      [IDL.Int, IDL.Vec(IDL.Tuple(IDL.Float64, IDL.Float64)), IDL.Bool],
+      [],
+      [],
+    ),
   'toggleStoreOpen' : IDL.Func([IDL.Int], [IDL.Bool], []),
   'updateOrderStatus' : IDL.Func([IDL.Int, OrderStatus], [], []),
   'updateProduct' : IDL.Func(
@@ -197,6 +204,7 @@ export const idlFactory = ({ IDL }) => {
     'price' : IDL.Float64,
   });
   const Store = IDL.Record({
+    'customDeliveryZone' : IDL.Vec(IDL.Tuple(IDL.Float64, IDL.Float64)),
     'storeId' : IDL.Int,
     'name' : IDL.Text,
     'createdAt' : IDL.Int,
@@ -207,6 +215,7 @@ export const idlFactory = ({ IDL }) => {
     'category' : IDL.Text,
     'rating' : IDL.Float64,
     'image' : IDL.Text,
+    'useCustomZone' : IDL.Bool,
   });
   
   return IDL.Service({
@@ -269,6 +278,11 @@ export const idlFactory = ({ IDL }) => {
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
     'isNewUser' : IDL.Func([IDL.Text], [IDL.Bool], ['query']),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'setStoreDeliveryZone' : IDL.Func(
+        [IDL.Int, IDL.Vec(IDL.Tuple(IDL.Float64, IDL.Float64)), IDL.Bool],
+        [],
+        [],
+      ),
     'toggleStoreOpen' : IDL.Func([IDL.Int], [IDL.Bool], []),
     'updateOrderStatus' : IDL.Func([IDL.Int, OrderStatus], [], []),
     'updateProduct' : IDL.Func(

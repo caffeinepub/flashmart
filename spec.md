@@ -1,43 +1,39 @@
 # FlashMart
 
 ## Current State
-FlashMart is a hyperlocal delivery app with:
-- Phone OTP login, Customer/Vendor/Delivery roles (password-protected)
-- Flat product list: vendors add products globally, customers browse all products
-- Orders stored in backend with status flow: requested → storeConfirmed → riderAssigned → pickedUp → delivered
-- No store concept -- products are tied to vendorId (Principal) only
-- Smart search, notification system, map pin/polygon delivery zone, order expiry
+- Single hardcoded global delivery polygon in `CartPage.tsx` (`DELIVERY_ZONE`)
+- `Store` type in Motoko has no zone fields
+- `MapPickerModal` shows map for pinning location but no zone polygon overlay
+- Vendors have no UI to define custom delivery zones
+- All stores use the same global polygon for delivery eligibility checks
 
 ## Requested Changes (Diff)
 
 ### Add
-- Store entity: storeId, name, image/logo, category, description, deliveryTime, vendorId, isOpen, rating, createdAt
-- Backend: createStore, getStoreByVendor, getAllStores, getStoreById, updateStore, toggleStoreOpen
-- Vendor Store Creation Flow: if vendor has no store → show Create Store form; if has store → show Store Dashboard
-- Store Dashboard (vendor): shows only their store's products, orders; toggle open/closed
-- Products now include storeId field
-- Customer side: Store listing page (browse all stores), Store detail page (products from that store only)
-- Store card: name, image, category, deliveryTime, rating, open/closed badge
-- Store search: search by name, category, keywords with auto-suggestions and trending
-- Orders include storeId
-- One store per vendor constraint (frontend-enforced)
+- `useCustomZone: Bool` and `customDeliveryZone: [(Float, Float)]` fields to Motoko `Store` type
+- `setStoreDeliveryZone(storeId, zone, useCustom)` backend function
+- `ZoneEditorModal` component: Leaflet map where vendor taps to add polygon points, can remove individual points, and sees the polygon shape live
+- Delivery zone logic: if store has `useCustomZone=true` and a saved polygon → use it; else → fall back to global polygon
+- Buffer logic in point-in-polygon: expand polygon slightly outward (~50m) before checking to handle GPS jitter near edges
+- Draw active delivery zone polygon on `MapPickerModal` (checkout map) so customer can see boundary
+- Color the polygon green (inside) or red (outside) based on pinned location status
+- `useSetStoreDeliveryZone` mutation hook in `useQueries.ts`
 
 ### Modify
-- VendorDashboard: check if vendor has store, gate to CreateStore or StoreDashboard
-- CustomerDashboard: navigate to store listing instead of flat product grid
-- addProduct: add storeId param
-- Product type: add storeId field
-- Order type: add storeId field
-- CartPage: include storeId in order
-- Backend Order/Product types updated
+- `Store` interface in `backend.d.ts`: add `useCustomZone: boolean` and `customDeliveryZone: Array<[number, number]>`
+- `CartPage.tsx`: replace hardcoded `DELIVERY_ZONE` with dynamic zone fetched from store data; pass zone to `MapPickerModal`
+- `MapPickerModal.tsx`: accept optional `deliveryZone` prop and draw it as a Leaflet polygon on the map
+- `VendorDashboard.tsx`: add a "Delivery Zone" settings card with toggle ("Use custom delivery zone") and "Edit Zone" button that opens `ZoneEditorModal`; preloads global zone as default points if no custom zone saved yet
+- `createStore` and `updateStore` in backend: initialize zone fields to empty/false defaults
 
 ### Remove
-- Nothing removed -- flat product browsing replaced by store-based browsing
+- Hardcoded `DELIVERY_ZONE` constant from `CartPage.tsx` (replace with store-aware dynamic lookup)
 
 ## Implementation Plan
-1. Update Motoko backend: add Store type, stores Map, store CRUD functions; add storeId to Product and Order
-2. Update frontend pages:
-   - New: StoreListPage, StoreDetailPage, CreateStorePage
-   - Modified: VendorDashboard (store check gate), CustomerDashboard (route to stores), CartPage (storeId in order), SmartSearchBar (store search variant)
-3. App.tsx: add new routes
-4. Keep all existing features intact (notifications, map, polygon check, order expiry, smart search on products)
+1. Update Motoko `Store` type with zone fields; add `setStoreDeliveryZone` function; update `createStore`/`updateStore` to initialize zone defaults
+2. Update `backend.d.ts` Store interface and add new function signature
+3. Add `useSetStoreDeliveryZone` hook to `useQueries.ts`
+4. Create `ZoneEditorModal.tsx` with Leaflet: tap to add points, click point to remove, live polygon preview, preload global zone as default, confirm saves zone
+5. Update `VendorDashboard.tsx`: add delivery zone card with toggle + Edit Zone button
+6. Update `MapPickerModal.tsx`: draw delivery zone polygon, color-code inside/outside
+7. Update `CartPage.tsx`: use store's zone (or global fallback), pass zone to `MapPickerModal`

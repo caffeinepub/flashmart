@@ -90,6 +90,7 @@ export class ExternalBlob {
     }
 }
 export interface Store {
+    customDeliveryZone: Array<[number, number]>;
     storeId: bigint;
     name: string;
     createdAt: bigint;
@@ -100,6 +101,7 @@ export interface Store {
     category: string;
     rating: number;
     image: string;
+    useCustomZone: boolean;
 }
 export interface Order {
     id: bigint;
@@ -177,6 +179,7 @@ export interface backendInterface {
     isCallerAdmin(): Promise<boolean>;
     isNewUser(phone: string): Promise<boolean>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    setStoreDeliveryZone(storeId: bigint, zone: Array<[number, number]>, useCustom: boolean): Promise<void>;
     toggleStoreOpen(storeId: bigint): Promise<boolean>;
     updateOrderStatus(orderId: bigint, newStatus: OrderStatus): Promise<void>;
     updateProduct(productId: bigint, name: string, description: string, price: number, image: string): Promise<void>;
@@ -562,6 +565,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.saveCallerUserProfile(to_candid_UserProfile_n23(this._uploadFile, this._downloadFile, arg0));
+            return result;
+        }
+    }
+    async setStoreDeliveryZone(arg0: bigint, arg1: Array<[number, number]>, arg2: boolean): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.setStoreDeliveryZone(arg0, arg1, arg2);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.setStoreDeliveryZone(arg0, arg1, arg2);
             return result;
         }
     }

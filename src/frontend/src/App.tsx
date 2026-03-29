@@ -16,6 +16,7 @@ import CartPage from "./pages/CartPage";
 import CreateStorePage from "./pages/CreateStorePage";
 import CustomerDashboard from "./pages/CustomerDashboard";
 import DeliveryDashboard from "./pages/DeliveryDashboard";
+import GlobalSearchPage from "./pages/GlobalSearchPage";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import OTPPage from "./pages/OTPPage";
@@ -37,6 +38,7 @@ const DASHBOARD_SCREENS: AppScreen[] = [
   "store-list",
   "store-detail",
   "create-store",
+  "global-search",
 ];
 
 function roleToScreen(role: UserRole): AppScreen {
@@ -150,6 +152,8 @@ function AppContent() {
             <DeliveryDashboard />
           </ProtectedRoute>
         );
+      case "global-search":
+        return <GlobalSearchPage />;
       default:
         return <LandingPage />;
     }

@@ -351,3 +351,27 @@ export function useUpdateStore() {
     },
   });
 }
+
+export function useSetStoreDeliveryZone() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      storeId,
+      zone,
+      useCustom,
+    }: {
+      storeId: bigint;
+      zone: Array<[number, number]>;
+      useCustom: boolean;
+    }) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.setStoreDeliveryZone(storeId, zone, useCustom);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["storeByVendor"] });
+      queryClient.invalidateQueries({ queryKey: ["allStores"] });
+      queryClient.invalidateQueries({ queryKey: ["storeById"] });
+    },
+  });
+}

@@ -12,7 +12,8 @@ export type AppScreen =
   | "cart"
   | "store-list"
   | "store-detail"
-  | "create-store";
+  | "create-store"
+  | "global-search";
 
 interface AppContextType {
   screen: AppScreen;

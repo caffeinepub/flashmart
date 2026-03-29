@@ -8,6 +8,7 @@ export interface None {
 }
 export type Option<T> = Some<T> | None;
 export interface Store {
+    customDeliveryZone: Array<[number, number]>;
     storeId: bigint;
     name: string;
     createdAt: bigint;
@@ -18,6 +19,7 @@ export interface Store {
     category: string;
     rating: number;
     image: string;
+    useCustomZone: boolean;
 }
 export interface Order {
     id: bigint;
@@ -94,6 +96,7 @@ export interface backendInterface {
     isCallerAdmin(): Promise<boolean>;
     isNewUser(phone: string): Promise<boolean>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    setStoreDeliveryZone(storeId: bigint, zone: Array<[number, number]>, useCustom: boolean): Promise<void>;
     toggleStoreOpen(storeId: bigint): Promise<boolean>;
     updateOrderStatus(orderId: bigint, newStatus: OrderStatus): Promise<void>;
     updateProduct(productId: bigint, name: string, description: string, price: number, image: string): Promise<void>;

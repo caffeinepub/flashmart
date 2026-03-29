@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { MapPin, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { isPointInPolygon } from "../utils/geofence";
 
 // Leaflet loaded via CDN at runtime to avoid bundler dependency
 declare global {
@@ -15,6 +16,7 @@ interface Props {
   initialLng?: number;
   onConfirm: (lat: number, lng: number) => void;
   onClose: () => void;
+  deliveryZone?: { lat: number; lng: number }[];
 }
 
 const DEFAULT_LAT = 17.339;
@@ -30,14 +32,12 @@ function loadLeaflet(): Promise<void> {
       resolve();
       return;
     }
-    // Load CSS
     if (!document.querySelector(`link[href="${LEAFLET_CSS}"]`)) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
       link.href = LEAFLET_CSS;
       document.head.appendChild(link);
     }
-    // Load JS
     if (!document.querySelector(`script[src="${LEAFLET_JS}"]`)) {
       const script = document.createElement("script");
       script.src = LEAFLET_JS;
@@ -55,14 +55,17 @@ export default function MapPickerModal({
   initialLng,
   onConfirm,
   onClose,
+  deliveryZone,
 }: Props) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
+  const zonePolygonRef = useRef<any>(null);
   const [pin, setPin] = useState<{ lat: number; lng: number } | null>(
     initialLat && initialLng ? { lat: initialLat, lng: initialLng } : null,
   );
   const [leafletReady, setLeafletReady] = useState(!!window.L);
+  const [pinInZone, setPinInZone] = useState<boolean | null>(null);
 
   // Load Leaflet on mount
   useEffect(() => {
@@ -71,6 +74,18 @@ export default function MapPickerModal({
     }
   }, [leafletReady]);
 
+  // Update zone polygon color when pin changes
+  useEffect(() => {
+    if (!zonePolygonRef.current || pin === null) return;
+    if (!deliveryZone) return;
+    const inside = isPointInPolygon(pin.lat, pin.lng, deliveryZone);
+    setPinInZone(inside);
+    zonePolygonRef.current.setStyle({
+      color: inside ? "#16a34a" : "#dc2626",
+      fillColor: inside ? "#16a34a" : "#dc2626",
+    });
+  }, [pin, deliveryZone]);
+
   // Initialize map when modal opens and leaflet is ready
   useEffect(() => {
     if (!open) {
@@ -78,6 +93,7 @@ export default function MapPickerModal({
         mapRef.current.remove();
         mapRef.current = null;
         markerRef.current = null;
+        zonePolygonRef.current = null;
       }
       return;
     }
@@ -100,9 +116,22 @@ export default function MapPickerModal({
       });
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "© OpenStreetMap contributors",
+        attribution: "\u00a9 OpenStreetMap contributors",
         maxZoom: 19,
       }).addTo(map);
+
+      // Draw delivery zone polygon if provided
+      if (deliveryZone && deliveryZone.length >= 3) {
+        const zonePolygon = L.polygon(
+          deliveryZone.map((p) => [p.lat, p.lng]),
+          { color: "#16a34a", weight: 2, fillOpacity: 0.08 },
+        ).addTo(map);
+        zonePolygonRef.current = zonePolygon;
+        // Fit bounds to show full zone
+        try {
+          map.fitBounds(zonePolygon.getBounds(), { padding: [20, 20] });
+        } catch {}
+      }
 
       if (initialLat && initialLng) {
         const marker = L.marker([initialLat, initialLng], {
@@ -135,13 +164,14 @@ export default function MapPickerModal({
     }, 50);
 
     return () => clearTimeout(timer);
-  }, [open, initialLat, initialLng, leafletReady]);
+  }, [open, initialLat, initialLng, leafletReady, deliveryZone]);
 
   useEffect(() => {
     if (open) {
       setPin(
         initialLat && initialLng ? { lat: initialLat, lng: initialLng } : null,
       );
+      setPinInZone(null);
     }
   }, [open, initialLat, initialLng]);
 
@@ -179,6 +209,26 @@ export default function MapPickerModal({
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {/* Zone hint */}
+        {deliveryZone && (
+          <div className="mx-4 mb-1 flex-shrink-0">
+            {pin === null ? (
+              <p className="text-[11px] text-gray-500 flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded-sm border-2 border-green-500" />
+                Green outline = delivery zone boundary
+              </p>
+            ) : pinInZone === true ? (
+              <p className="text-[11px] font-semibold text-green-600">
+                ✅ Inside delivery zone
+              </p>
+            ) : (
+              <p className="text-[11px] font-semibold text-red-500">
+                ❌ Outside delivery zone
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Map Container */}
         <div

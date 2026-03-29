@@ -8,6 +8,7 @@ import {
   Loader2,
   MapPin,
   RefreshCw,
+  Search,
   ShoppingBag,
   ShoppingCart,
   Store,
@@ -541,6 +542,18 @@ export default function CustomerDashboard() {
           </motion.button>
         )}
       </div>
+
+      {/* Global Search Bar */}
+      <button
+        type="button"
+        onClick={() => navigate("global-search")}
+        className="w-full mb-4 h-11 rounded-xl border border-gray-200 bg-white shadow-sm flex items-center gap-2 px-4 text-gray-400 text-sm hover:border-primary/30 hover:shadow-md transition-all"
+        data-ocid="dashboard.search_input"
+        aria-label="Search products and stores"
+      >
+        <Search className="w-4 h-4 flex-shrink-0" />
+        <span>Search products &amp; stores...</span>
+      </button>
 
       {/* Location Banner */}
       {renderLocationBanner()}
