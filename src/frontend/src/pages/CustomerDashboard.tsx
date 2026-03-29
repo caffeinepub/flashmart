@@ -22,6 +22,7 @@ import { type Order, OrderStatus, type Product } from "../backend";
 import ConfirmModal from "../components/ConfirmModal";
 import LocationModal from "../components/LocationModal";
 import OutOfRangeModal from "../components/OutOfRangeModal";
+import SmartSearchBar from "../components/SmartSearchBar";
 import { useApp } from "../context/AppContext";
 import { useCart } from "../context/CartContext";
 import { useLocation } from "../hooks/useLocation";
@@ -30,6 +31,7 @@ import {
   useCreateOrder,
   useMyOrders,
 } from "../hooks/useQueries";
+import { filterAndRankProducts } from "../utils/searchUtils";
 
 const statusConfig: Record<
   OrderStatus,
@@ -207,6 +209,8 @@ export default function CustomerDashboard() {
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showOutOfRange, setShowOutOfRange] = useState(false);
   const [itemName, setItemName] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeSearch, setActiveSearch] = useState("");
   const [itemError, setItemError] = useState("");
   const [lastCreated, setLastCreated] = useState("");
   const [confirmModal, setConfirmModal] = useState<{
@@ -339,6 +343,8 @@ export default function CustomerDashboard() {
   const completedOrders = orders.filter(
     (o) => o.status === OrderStatus.delivered,
   );
+
+  const filteredProducts = filterAndRankProducts(products, activeSearch);
 
   const renderLocationBanner = () => {
     if (status === "in_range") {
@@ -560,6 +566,31 @@ export default function CustomerDashboard() {
             </p>
           </div>
         </div>
+        <SmartSearchBar
+          products={products}
+          value={searchQuery}
+          onChange={setSearchQuery}
+          onSearch={(q) => setActiveSearch(q)}
+        />
+        {activeSearch && (
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-gray-500">
+              {filteredProducts.length === 0
+                ? "No results found"
+                : `${filteredProducts.length} result${filteredProducts.length !== 1 ? "s" : ""} for "${activeSearch}"`}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery("");
+                setActiveSearch("");
+              }}
+              className="text-xs text-green-600 font-semibold hover:underline"
+            >
+              Show all
+            </button>
+          </div>
+        )}
 
         {productsLoading ? (
           <div
@@ -583,7 +614,7 @@ export default function CustomerDashboard() {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {products.map((product, idx) => {
+            {filteredProducts.map((product, idx) => {
               const cartItem = items.find(
                 (i) => i.id === product.productId.toString(),
               );

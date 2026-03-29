@@ -1,19 +1,40 @@
-# FlashMart
+# FlashMart Smart Search
 
 ## Current State
-Full FlashMart app with phone OTP login, customer/vendor/delivery dashboards, cart, product management, location gating, map pinning, order expiry, and notification sounds. The current canister keeps stopping (IC0508) and needs a fresh deployment.
+The Customer Dashboard displays all vendor products in a grid with no search or filter functionality. Products are fetched from the backend and rendered directly. There is no search bar, filtering, or sorting.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Nothing new
+- Smart search bar at the top of the product grid in CustomerDashboard
+- `useSmartSearch` hook with NLP-style query parsing logic (pure frontend, no external APIs)
+- `SmartSearchBar` component with:
+  - Search input with debounce
+  - Auto-suggestions dropdown (based on product names + categories)
+  - Recent searches (stored in localStorage)
+  - Trending searches (hardcoded popular queries)
+  - Natural language query parser that extracts: price filters, category hints, keyword relevance
+  - Search result ranking: price match > category match > keyword match > popular items
+- `searchUtils.ts` utility for NLP query parsing
 
 ### Modify
-- Rebuild/redeploy to provision a fresh canister
+- `CustomerDashboard.tsx`: add `SmartSearchBar` above product grid; filter/rank `products` array using smart search results before rendering
 
 ### Remove
 - Nothing
 
 ## Implementation Plan
-- Regenerate Motoko backend (same logic) to force new canister provisioning
-- Keep all frontend code exactly as-is
+1. Create `src/frontend/src/utils/searchUtils.ts` — NLP query parser:
+   - Keyword→category mapping (e.g. "snack" → snacks, "healthy" → vegetables/fruits, "party" → beverages/snacks)
+   - Price intent extraction: "under 100", "cheap", "budget" → maxPrice
+   - Scoring function: score each product against parsed query
+   - Ranking: popular (high price proxy for now, or fixed popularity scores) + relevance score
+2. Create `src/frontend/src/components/SmartSearchBar.tsx`:
+   - Controlled search input
+   - Debounced suggestions
+   - Dropdown with: recent searches, trending searches, product name suggestions
+   - Keyboard navigation
+   - Clear button
+3. Update `CustomerDashboard.tsx`:
+   - Import and render `SmartSearchBar`
+   - Apply filtered+ranked product list to the grid
