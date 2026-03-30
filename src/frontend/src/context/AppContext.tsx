@@ -13,7 +13,8 @@ export type AppScreen =
   | "store-list"
   | "store-detail"
   | "create-store"
-  | "global-search";
+  | "global-search"
+  | "order-tracking";
 
 interface AppContextType {
   screen: AppScreen;
@@ -26,6 +27,8 @@ interface AppContextType {
   setCurrentUser: (user: UserProfile | null) => void;
   currentStoreId: bigint | null;
   setCurrentStoreId: (id: bigint | null) => void;
+  trackingOrderId: bigint | null;
+  setTrackingOrderId: (id: bigint | null) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -36,6 +39,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [demoOtp, setDemoOtp] = useState("");
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [currentStoreId, setCurrentStoreId] = useState<bigint | null>(null);
+  const [trackingOrderId, setTrackingOrderId] = useState<bigint | null>(null);
 
   return (
     <AppContext.Provider
@@ -50,6 +54,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCurrentUser,
         currentStoreId,
         setCurrentStoreId,
+        trackingOrderId,
+        setTrackingOrderId,
       }}
     >
       {children}

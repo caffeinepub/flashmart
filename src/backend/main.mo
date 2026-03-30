@@ -9,12 +9,10 @@ import Array "mo:core/Array";
 import Principal "mo:core/Principal";
 import Runtime "mo:core/Runtime";
 import MixinAuthorization "authorization/MixinAuthorization";
-import Migration "migration";
-
 import AccessControl "authorization/access-control";
+import { migration } "StoreMigration";
 
-// Specify data migration function in with-clause
-(with migration = Migration.run)
+(with migration)
 actor {
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
@@ -54,8 +52,8 @@ actor {
     isOpen : Bool;
     rating : Float;
     createdAt : Int;
-    useCustomZone : Bool;
-    customDeliveryZone : [(Float, Float)];
+    latitude : Float;
+    longitude : Float;
   };
 
   public type UserProfile = {
@@ -94,6 +92,14 @@ actor {
     createdAt : Int;
   };
 
+  public type DeliveryLocation = {
+    orderId : Int;
+    lat : Float;
+    lng : Float;
+    updatedAt : Int;
+    partnerId : Principal;
+  };
+
   module UserProfile {
     public func compare(p1 : UserProfile, p2 : UserProfile) : Order.Order {
       Text.compare(p1.phone, p2.phone);
@@ -106,6 +112,7 @@ actor {
   let products = Map.empty<Int, Product>();
   let otps = Map.empty<Text, OTP>();
   let orders = Map.empty<Int, Order>();
+  let deliveryLocations = Map.empty<Int, DeliveryLocation>();
   var nextOrderId : Nat = 1;
   var nextProductId : Nat = 1;
   var nextStoreId : Nat = 1;
@@ -121,20 +128,6 @@ actor {
     switch (users.get(principal)) {
       case (null) { false };
       case (?_) { true };
-    };
-  };
-
-  // Store Delivery Zones
-  public shared ({ caller }) func setStoreDeliveryZone(storeId : Int, zone : [(Float, Float)], useCustom : Bool) : async () {
-    switch (stores.get(storeId)) {
-      case (null) { Runtime.trap("Store not found") };
-      case (?store) {
-        if (store.vendorId != caller and not isAppAdmin(caller)) {
-          Runtime.trap("Unauthorized: Can only update your own store's delivery zone");
-        };
-        let updatedStore = { store with useCustomZone = useCustom; customDeliveryZone = zone };
-        stores.add(storeId, updatedStore);
-      };
     };
   };
 
@@ -169,13 +162,11 @@ actor {
   };
 
   // 1. Store Management
-  public shared ({ caller }) func createStore(name : Text, image : Text, category : Text, description : Text, deliveryTime : Text) : async Int {
-    // Authorization: Must be a registered user
+  public shared ({ caller }) func createStore(name : Text, image : Text, category : Text, description : Text, deliveryTime : Text, latitude : Float, longitude : Float) : async Int {
     if (not isRegisteredUser(caller)) {
       Runtime.trap("Unauthorized: Must be a registered user to create a store");
     };
 
-    // Check that store with caller as vendorId does not already exist
     let storeExists = stores.values().any(func(s) { s.vendorId == caller });
     if (storeExists) { Runtime.trap("Store already exists") };
 
@@ -193,8 +184,8 @@ actor {
       isOpen = true;
       rating = 0.0;
       createdAt = Time.now();
-      useCustomZone = false;
-      customDeliveryZone = [];
+      latitude;
+      longitude;
     };
 
     stores.add(storeId, store);
@@ -205,11 +196,9 @@ actor {
     switch (stores.get(storeId)) {
       case (null) { Runtime.trap("Store not found") };
       case (?store) {
-        // Authorization: Only store owner or admin can update
         if (store.vendorId != caller and not isAppAdmin(caller)) {
           Runtime.trap("Unauthorized: Can only update your own store");
         };
-
         let updatedStore = {
           storeId;
           name;
@@ -221,10 +210,23 @@ actor {
           isOpen = store.isOpen;
           rating = store.rating;
           createdAt = store.createdAt;
-          useCustomZone = store.useCustomZone;
-          customDeliveryZone = store.customDeliveryZone;
+          latitude = store.latitude;
+          longitude = store.longitude;
         };
         stores.add(storeId, updatedStore);
+      };
+    };
+  };
+
+  // Admin-only: update store location after creation
+  public shared ({ caller }) func updateStoreLocation(storeId : Int, latitude : Float, longitude : Float) : async () {
+    if (not isAppAdmin(caller)) {
+      Runtime.trap("Unauthorized: Only admins can update store location");
+    };
+    switch (stores.get(storeId)) {
+      case (null) { Runtime.trap("Store not found") };
+      case (?store) {
+        stores.add(storeId, { store with latitude; longitude });
       };
     };
   };
@@ -233,11 +235,9 @@ actor {
     switch (stores.get(storeId)) {
       case (null) { Runtime.trap("Store not found") };
       case (?store) {
-        // Authorization: Only store owner or admin can toggle
         if (store.vendorId != caller and not isAppAdmin(caller)) {
           Runtime.trap("Unauthorized: Can only toggle your own store");
         };
-
         let updatedStore = {
           storeId = store.storeId;
           name = store.name;
@@ -249,8 +249,8 @@ actor {
           isOpen = not store.isOpen;
           rating = store.rating;
           createdAt = store.createdAt;
-          useCustomZone = store.useCustomZone;
-          customDeliveryZone = store.customDeliveryZone;
+          latitude = store.latitude;
+          longitude = store.longitude;
         };
         stores.add(storeId, updatedStore);
         updatedStore.isOpen;
@@ -272,7 +272,6 @@ actor {
 
   // User registration - requires verified OTP
   public shared ({ caller }) func createUserProfile(phone : Text, name : Text, role : UserRole) : async () {
-    // Authorization: Verify OTP before allowing registration
     switch (otps.get(phone)) {
       case (null) { Runtime.trap("Unauthorized: OTP not found. Please generate OTP first") };
       case (?otp) {
@@ -281,18 +280,14 @@ actor {
         };
       };
     };
-
-    // All self-registrations are forced to customer role
     let profile = { id = caller; phone; name; role = #customer; createdAt = Time.now() };
     users.add(caller, profile);
   };
 
   public shared ({ caller }) func updateUserRole(user : Principal, newRole : UserRole) : async () {
-    // Authorization: Only admins can update user roles
     if (not isAppAdmin(caller)) {
       Runtime.trap("Unauthorized: Only admins can update user roles");
     };
-
     switch (users.get(user)) {
       case (null) { Runtime.trap("User not found") };
       case (?profile) {
@@ -308,7 +303,6 @@ actor {
     };
   };
 
-  // Public - no authentication required (checking if user exists)
   public query ({ caller }) func isNewUser(phone : Text) : async Bool {
     for (user in users.values()) {
       if (user.phone == phone) { return false };
@@ -317,7 +311,6 @@ actor {
   };
 
   public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
-    // Authorization: Can only view your own profile or admin can view any
     if (caller != user and not isAppAdmin(caller)) {
       Runtime.trap("Unauthorized: Can only view your own profile");
     };
@@ -337,7 +330,6 @@ actor {
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    // Authorization: Can only save your own profile
     if (profile.id != caller) {
       Runtime.trap("Unauthorized: Can only save your own profile");
     };
@@ -345,11 +337,9 @@ actor {
   };
 
   public shared ({ caller }) func createOrder(storeId : Int, itemName : Text, customerName : Text, customerPhone : Text, customerAddress : Text, pinnedLatitude : Float, pinnedLongitude : Float) : async Int {
-    // Authorization: Must be a registered user to create orders
     if (not isRegisteredUser(caller)) {
       Runtime.trap("Unauthorized: Must be a registered user to create orders");
     };
-
     let orderId = nextOrderId;
     nextOrderId += 1;
     let order = {
@@ -373,29 +363,20 @@ actor {
     switch (orders.get(orderId)) {
       case (null) { Runtime.trap("Order not found") };
       case (?order) {
-        // Authorization: Different roles can update status based on current status
         let isCustomer = order.customerId == caller;
         let isStoreOwner = switch (stores.get(order.storeId)) {
           case (null) { false };
           case (?store) { store.vendorId == caller };
         };
-        let isDeliveryPerson = switch (users.get(caller)) {
-          case (null) { false };
-          case (?profile) { profile.role == #deliveryP };
-        };
+        let isRegisteredCaller = isRegisteredUser(caller);
         let isAdmin = isAppAdmin(caller);
 
-        // Authorization rules based on status transitions:
-        // - requested -> storeConfirmed: only store owner or admin
-        // - storeConfirmed -> riderAssigned: only admin or delivery person
-        // - riderAssigned -> pickedUp: only assigned delivery person or admin
-        // - pickedUp -> delivered: only delivery person or admin
         let authorized = switch (order.status, newStatus) {
           case (#requested, #storeConfirmed) { isStoreOwner or isAdmin };
-          case (#storeConfirmed, #riderAssigned) { isDeliveryPerson or isAdmin };
-          case (#riderAssigned, #pickedUp) { isDeliveryPerson or isAdmin };
-          case (#pickedUp, #delivered) { isDeliveryPerson or isAdmin };
-          case (_, _) { isAdmin }; // Admin can make any transition
+          case (#storeConfirmed, #riderAssigned) { isRegisteredCaller or isAdmin };
+          case (#riderAssigned, #pickedUp) { isRegisteredCaller or isAdmin };
+          case (#pickedUp, #delivered) { isRegisteredCaller or isAdmin };
+          case (_, _) { isAdmin };
         };
 
         if (not authorized) {
@@ -424,46 +405,34 @@ actor {
     switch (orders.get(orderId)) {
       case (null) { null };
       case (?order) {
-        // Authorization: Only customer, store owner, delivery person, or admin can view
         let isCustomer = order.customerId == caller;
         let isStoreOwner = switch (stores.get(order.storeId)) {
           case (null) { false };
           case (?store) { store.vendorId == caller };
         };
-        let isDeliveryPerson = switch (users.get(caller)) {
-          case (null) { false };
-          case (?profile) { profile.role == #deliveryP };
-        };
-
-        if (not isCustomer and not isStoreOwner and not isDeliveryPerson and not isAppAdmin(caller)) {
+        if (not isCustomer and not isStoreOwner and not isRegisteredUser(caller) and not isAppAdmin(caller)) {
           Runtime.trap("Unauthorized: Can only view orders you are involved in");
         };
-
         ?order;
       };
     };
   };
 
   public query ({ caller }) func getOrdersByCustomer(customer : Principal) : async [Order] {
-    // Authorization: Only the customer themselves or admin can view
     if (caller != customer and not isAppAdmin(caller)) {
       Runtime.trap("Unauthorized: Can only view your own orders");
     };
-
     orders.values().toArray().filter(func(o) { o.customerId == customer });
   };
 
   public query ({ caller }) func getOrdersByStatus(status : OrderStatus) : async [Order] {
-    // Authorization: Must be registered user to view orders by status
     if (not isRegisteredUser(caller) and not isAppAdmin(caller)) {
       Runtime.trap("Unauthorized: Must be a registered user to view orders");
     };
-
     orders.values().toArray().filter(func(o) { o.status == status });
   };
 
   public query ({ caller }) func getAllOrders() : async [Order] {
-    // Authorization: Only admins can view all orders
     if (not isAppAdmin(caller)) {
       Runtime.trap("Unauthorized: Only admins can view all orders");
     };
@@ -471,7 +440,6 @@ actor {
   };
 
   public query ({ caller }) func getAllUsers() : async [UserProfile] {
-    // Authorization: Only admins can view all users
     if (not isAppAdmin(caller)) {
       Runtime.trap("Unauthorized: Only admins can view all users");
     };
@@ -482,21 +450,14 @@ actor {
     switch (orders.get(orderId)) {
       case (null) { null };
       case (?order) {
-        // Authorization: Only involved parties can check order status
         let isCustomer = order.customerId == caller;
         let isStoreOwner = switch (stores.get(order.storeId)) {
           case (null) { false };
           case (?store) { store.vendorId == caller };
         };
-        let isDeliveryPerson = switch (users.get(caller)) {
-          case (null) { false };
-          case (?profile) { profile.role == #deliveryP };
-        };
-
-        if (not isCustomer and not isStoreOwner and not isDeliveryPerson and not isAppAdmin(caller)) {
+        if (not isCustomer and not isStoreOwner and not isRegisteredUser(caller) and not isAppAdmin(caller)) {
           Runtime.trap("Unauthorized: Can only check status of orders you are involved in");
         };
-
         ?order.status;
       };
     };
@@ -504,7 +465,6 @@ actor {
 
   // Product Management
   public shared ({ caller }) func addProduct(storeId : Int, name : Text, description : Text, price : Float, image : Text) : async Int {
-    // Authorization: Verify caller owns the store
     switch (stores.get(storeId)) {
       case (null) { Runtime.trap("Store not found") };
       case (?store) {
@@ -513,7 +473,6 @@ actor {
         };
       };
     };
-
     let productId = nextProductId;
     nextProductId += 1;
     let product = {
@@ -534,7 +493,6 @@ actor {
     switch (products.get(productId)) {
       case (null) { Runtime.trap("Product not found") };
       case (?product) {
-        // Authorization: Only product owner or admin can update
         if (product.vendorId != caller and not isAppAdmin(caller)) {
           Runtime.trap("Unauthorized: Can only update your own products");
         };
@@ -557,7 +515,6 @@ actor {
     switch (products.get(productId)) {
       case (null) { Runtime.trap("Product not found") };
       case (?product) {
-        // Authorization: Only product owner or admin can delete
         if (product.vendorId != caller and not isAppAdmin(caller)) {
           Runtime.trap("Unauthorized: Can only delete your own products");
         };
@@ -573,4 +530,31 @@ actor {
   public query ({ caller }) func getProductsByVendor(vendorId : Principal) : async [Product] {
     products.values().toArray().filter(func(p) { p.vendorId == vendorId }).sort();
   };
+
+  // ==========================================
+  // LIVE DELIVERY LOCATION TRACKING
+  // ==========================================
+
+  // Called by delivery partner every ~4 seconds while delivering
+  public shared ({ caller }) func updateDeliveryLocation(orderId : Int, lat : Float, lng : Float) : async () {
+    let loc = {
+      orderId;
+      lat;
+      lng;
+      updatedAt = Time.now();
+      partnerId = caller;
+    };
+    deliveryLocations.add(orderId, loc);
+  };
+
+  // Called by customer for polling latest rider position
+  public query ({ caller }) func getDeliveryLocation(orderId : Int) : async ?DeliveryLocation {
+    deliveryLocations.get(orderId);
+  };
+
+  // Clean up location after delivery is complete
+  public shared ({ caller }) func clearDeliveryLocation(orderId : Int) : async () {
+    deliveryLocations.remove(orderId);
+  };
+
 };

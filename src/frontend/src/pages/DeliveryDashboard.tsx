@@ -20,6 +20,7 @@ import { type Order, OrderStatus } from "../backend";
 import ConfirmModal from "../components/ConfirmModal";
 import { useApp } from "../context/AppContext";
 import { useNotifications } from "../context/NotificationContext";
+import { useActor } from "../hooks/useActor";
 import { useOrdersByStatus, useUpdateOrderStatus } from "../hooks/useQueries";
 
 interface ParsedOrderData {
@@ -160,8 +161,10 @@ function CustomerInfo({ data }: { data: ParsedOrderData }) {
 
 export default function DeliveryDashboard() {
   const { currentUser, navigate } = useApp();
+  const { actor } = useActor();
   const { addNotification } = useNotifications();
   const prevAssignedCount = useRef(-1);
+  const gpsIntervalsRef = useRef<Map<string, number>>(new Map());
   const {
     data: confirmedOrders = [],
     isLoading: loadingConfirmed,
@@ -189,6 +192,16 @@ export default function DeliveryDashboard() {
     }
     prevAssignedCount.current = count;
   }, [confirmedOrders.length, addNotification]);
+
+  // Cleanup all intervals on unmount
+  useEffect(() => {
+    return () => {
+      for (const intervalId of gpsIntervalsRef.current.values()) {
+        clearInterval(intervalId);
+      }
+    };
+  }, []);
+
   const [confirmModal, setConfirmModal] = useState<{
     open: boolean;
     message: string;
@@ -228,25 +241,73 @@ export default function DeliveryDashboard() {
     });
   };
 
-  const handleMarkPickedUp = (order: Order) => {
+  const startGpsTracking = (order: Order) => {
+    const orderIdStr = order.id.toString();
+    if (gpsIntervalsRef.current.has(orderIdStr)) return;
+
+    const sendLocation = () => {
+      if (!actor) return;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          (actor as any)
+            .updateDeliveryLocation(
+              order.id,
+              pos.coords.latitude,
+              pos.coords.longitude,
+            )
+            .catch(() => {});
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 5000 },
+      );
+    };
+
+    sendLocation();
+    const intervalId = window.setInterval(sendLocation, 4000);
+    gpsIntervalsRef.current.set(orderIdStr, intervalId);
+  };
+
+  const handleStartDelivery = (order: Order) => {
     const { items } = parseOrderData(order.itemName);
-    openConfirm(`Mark "${items}" as picked up?`, async () => {
-      try {
-        await updateStatus.mutateAsync({
-          orderId: order.id,
-          status: OrderStatus.pickedUp,
-        });
-        toast.success("Marked as picked up!");
-      } catch (e: unknown) {
-        toast.error((e as Error)?.message || "Failed.");
-      }
-    });
+    openConfirm(
+      `Start delivery for "${items}"? This will share your live location with the customer.`,
+      async () => {
+        try {
+          await updateStatus.mutateAsync({
+            orderId: order.id,
+            status: OrderStatus.pickedUp,
+          });
+          toast.success("Delivery started! Live tracking active 🛵");
+          startGpsTracking(order);
+        } catch (e: unknown) {
+          toast.error((e as Error)?.message || "Failed.");
+        }
+      },
+    );
   };
 
   const handleMarkDelivered = (order: Order) => {
     const { items } = parseOrderData(order.itemName);
     openConfirm(`Mark "${items}" as delivered?`, async () => {
       try {
+        // Clear GPS tracking
+        const orderIdStr = order.id.toString();
+        const intervalId = gpsIntervalsRef.current.get(orderIdStr);
+        if (intervalId !== undefined) {
+          clearInterval(intervalId);
+          gpsIntervalsRef.current.delete(orderIdStr);
+        }
+        try {
+          if (
+            actor &&
+            typeof (actor as any).clearDeliveryLocation === "function"
+          ) {
+            (actor as any).clearDeliveryLocation(order.id).catch(() => {});
+          }
+        } catch {
+          // function not available on this canister version, ignore
+        }
+
         await updateStatus.mutateAsync({
           orderId: order.id,
           status: OrderStatus.delivered,
@@ -406,13 +467,13 @@ export default function DeliveryDashboard() {
                     <CustomerInfo data={parsed} />
                     <Button
                       size="sm"
-                      onClick={() => handleMarkPickedUp(order)}
+                      onClick={() => handleStartDelivery(order)}
                       disabled={updateStatus.isPending}
-                      className="w-full bg-purple-600 hover:bg-purple-700 text-white gap-1.5 text-xs"
+                      className="w-full bg-green-600 hover:bg-green-700 text-white gap-1.5 text-xs"
                       data-ocid={`delivery.pickup.button.${i + 1}`}
                     >
                       <Package className="w-3.5 h-3.5" />
-                      Mark as Picked Up
+                      Start Delivery
                     </Button>
                   </CardContent>
                 </Card>
@@ -432,6 +493,9 @@ export default function DeliveryDashboard() {
           <div className="space-y-3">
             {pickedOrders.map((order, i) => {
               const parsed = parseOrderData(order.itemName);
+              const isTracking = gpsIntervalsRef.current.has(
+                order.id.toString(),
+              );
               return (
                 <Card
                   key={order.id.toString()}
@@ -450,6 +514,12 @@ export default function DeliveryDashboard() {
                         <p className="text-xs text-muted-foreground">
                           Order #{order.id.toString()}
                         </p>
+                        {isTracking && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-100 rounded-full px-2 py-0.5 mt-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                            Live tracking active
+                          </span>
+                        )}
                       </div>
                     </div>
                     <CustomerInfo data={parsed} />

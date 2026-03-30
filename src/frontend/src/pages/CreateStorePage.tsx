@@ -9,11 +9,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, ImageIcon, Loader2, Store } from "lucide-react";
+import { ArrowLeft, ImageIcon, Loader2, MapPin, Store } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import MapPickerModal from "../components/MapPickerModal";
 import { useApp } from "../context/AppContext";
 import { useCreateStore } from "../hooks/useQueries";
+import { GLOBAL_DELIVERY_ZONE, isPointInPolygon } from "../utils/geofence";
 
 const CATEGORIES = [
   "Grocery",
@@ -38,6 +40,7 @@ interface FormErrors {
   name?: string;
   category?: string;
   deliveryTime?: string;
+  location?: string;
 }
 
 export default function CreateStorePage() {
@@ -52,18 +55,38 @@ export default function CreateStorePage() {
     deliveryTime: "",
   });
   const [errors, setErrors] = useState<FormErrors>({});
+  const [storeLocation, setStoreLocation] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const [mapOpen, setMapOpen] = useState(false);
+
+  const locationInsideZone =
+    storeLocation !== null
+      ? isPointInPolygon(
+          storeLocation.lat,
+          storeLocation.lng,
+          GLOBAL_DELIVERY_ZONE,
+        )
+      : null;
 
   const validate = (): boolean => {
     const e: FormErrors = {};
     if (!form.name.trim()) e.name = "Store name is required";
     if (!form.category) e.category = "Please select a category";
     if (!form.deliveryTime.trim()) e.deliveryTime = "Delivery time is required";
+    if (!storeLocation) {
+      e.location = "Please select your store location on the map";
+    } else if (!locationInsideZone) {
+      e.location = "Store must be inside service area";
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
   const handleSubmit = async () => {
     if (!validate()) return;
+    if (!storeLocation) return;
     try {
       await createStore.mutateAsync({
         name: form.name.trim(),
@@ -71,6 +94,8 @@ export default function CreateStorePage() {
         category: form.category,
         description: form.description.trim(),
         deliveryTime: form.deliveryTime.trim(),
+        latitude: storeLocation.lat,
+        longitude: storeLocation.lng,
       });
       toast.success("Store created successfully!");
       navigate("vendor-dashboard");
@@ -211,6 +236,91 @@ export default function CreateStorePage() {
           />
         </div>
 
+        {/* Store Location */}
+        <div>
+          <Label className="text-xs font-bold text-gray-700">
+            Store Location <span className="text-red-500">*</span>
+          </Label>
+          <p className="text-[11px] text-gray-400 mb-2">
+            Pin your store on the map. Must be inside the service area. This
+            cannot be changed after creation.
+          </p>
+
+          {/* Pick / Change button */}
+          {!storeLocation ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setErrors((er) => ({ ...er, location: undefined }));
+                setMapOpen(true);
+              }}
+              className={`w-full h-11 text-sm font-bold border-2 rounded-xl flex items-center gap-2 ${
+                errors.location
+                  ? "border-red-400 text-red-600 hover:bg-red-50"
+                  : "border-green-400 text-green-700 hover:bg-green-50"
+              }`}
+              data-ocid="create-store.location.open_modal_button"
+            >
+              <MapPin className="w-4 h-4" />
+              Pick Store Location on Map
+            </Button>
+          ) : (
+            <div className="space-y-2">
+              {/* Coordinates display */}
+              <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
+                <MapPin className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                <span className="text-xs text-gray-700 font-mono">
+                  📍 Location set: {storeLocation.lat.toFixed(5)},{" "}
+                  {storeLocation.lng.toFixed(5)}
+                </span>
+              </div>
+
+              {/* Inside / outside badge */}
+              {locationInsideZone === true ? (
+                <div
+                  className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2"
+                  data-ocid="create-store.location.success_state"
+                >
+                  <span className="text-xs font-bold text-green-700">
+                    ✅ Inside service area
+                  </span>
+                </div>
+              ) : (
+                <div
+                  className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2"
+                  data-ocid="create-store.location.error_state"
+                >
+                  <span className="text-xs font-bold text-red-600">
+                    ❌ Outside service area — Store must be inside service area
+                  </span>
+                </div>
+              )}
+
+              {/* Change location button */}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setMapOpen(true)}
+                className="w-full h-9 text-xs font-semibold border border-gray-300 text-gray-600 hover:bg-gray-50 rounded-xl"
+                data-ocid="create-store.location.edit_button"
+              >
+                <MapPin className="w-3.5 h-3.5 mr-1" />
+                Change Location
+              </Button>
+            </div>
+          )}
+
+          {errors.location && (
+            <p
+              className="text-xs text-red-500 mt-1.5"
+              data-ocid="create-store.location_error"
+            >
+              {errors.location}
+            </p>
+          )}
+        </div>
+
         {/* Image URL */}
         <div>
           <Label className="text-xs font-bold text-gray-700 flex items-center gap-1">
@@ -248,6 +358,20 @@ export default function CreateStorePage() {
           )}
         </Button>
       </div>
+
+      {/* Map Picker Modal */}
+      <MapPickerModal
+        open={mapOpen}
+        initialLat={storeLocation?.lat}
+        initialLng={storeLocation?.lng}
+        deliveryZone={GLOBAL_DELIVERY_ZONE}
+        onConfirm={(lat, lng) => {
+          setStoreLocation({ lat, lng });
+          setErrors((er) => ({ ...er, location: undefined }));
+          setMapOpen(false);
+        }}
+        onClose={() => setMapOpen(false)}
+      />
     </div>
   );
 }

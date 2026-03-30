@@ -8,7 +8,6 @@ export interface None {
 }
 export type Option<T> = Some<T> | None;
 export interface Store {
-    customDeliveryZone: Array<[number, number]>;
     storeId: bigint;
     name: string;
     createdAt: bigint;
@@ -19,7 +18,8 @@ export interface Store {
     category: string;
     rating: number;
     image: string;
-    useCustomZone: boolean;
+    latitude: number;
+    longitude: number;
 }
 export interface Order {
     id: bigint;
@@ -73,7 +73,7 @@ export interface backendInterface {
     addProduct(storeId: bigint, name: string, description: string, price: number, image: string): Promise<bigint>;
     assignCallerUserRole(user: Principal, role: UserRole__1): Promise<void>;
     createOrder(storeId: bigint, itemName: string, customerName: string, customerPhone: string, customerAddress: string, pinnedLatitude: number, pinnedLongitude: number): Promise<bigint>;
-    createStore(name: string, image: string, category: string, description: string, deliveryTime: string): Promise<bigint>;
+    createStore(name: string, image: string, category: string, description: string, deliveryTime: string, latitude: number, longitude: number): Promise<bigint>;
     createUserProfile(phone: string, name: string, role: UserRole): Promise<void>;
     deleteProduct(productId: bigint): Promise<void>;
     generateOtp(phone: string): Promise<string>;
@@ -96,11 +96,11 @@ export interface backendInterface {
     isCallerAdmin(): Promise<boolean>;
     isNewUser(phone: string): Promise<boolean>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
-    setStoreDeliveryZone(storeId: bigint, zone: Array<[number, number]>, useCustom: boolean): Promise<void>;
     toggleStoreOpen(storeId: bigint): Promise<boolean>;
     updateOrderStatus(orderId: bigint, newStatus: OrderStatus): Promise<void>;
     updateProduct(productId: bigint, name: string, description: string, price: number, image: string): Promise<void>;
     updateStore(storeId: bigint, name: string, image: string, category: string, description: string, deliveryTime: string): Promise<void>;
+    updateStoreLocation(storeId: bigint, latitude: number, longitude: number): Promise<void>;
     updateUserRole(user: Principal, newRole: UserRole): Promise<void>;
     verifyOtp(phone: string, code: string): Promise<boolean>;
 }

@@ -20,6 +20,7 @@ import GlobalSearchPage from "./pages/GlobalSearchPage";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import OTPPage from "./pages/OTPPage";
+import OrderTrackingPage from "./pages/OrderTrackingPage";
 import RoleSelectionPage from "./pages/RoleSelectionPage";
 import StoreDetailPage from "./pages/StoreDetailPage";
 import StoreListPage from "./pages/StoreListPage";
@@ -39,6 +40,7 @@ const DASHBOARD_SCREENS: AppScreen[] = [
   "store-detail",
   "create-store",
   "global-search",
+  "order-tracking",
 ];
 
 function roleToScreen(role: UserRole): AppScreen {
@@ -125,6 +127,8 @@ function AppContent() {
         return <StoreListPage />;
       case "store-detail":
         return <StoreDetailPage />;
+      case "order-tracking":
+        return <OrderTrackingPage />;
       case "create-store":
         return (
           <ProtectedRoute

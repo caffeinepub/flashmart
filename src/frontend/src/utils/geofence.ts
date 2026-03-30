@@ -1,24 +1,18 @@
-import type { Store } from "../backend.d";
-
+// Fixed delivery zone polygon — read-only, cannot be modified by vendors
 export const GLOBAL_DELIVERY_ZONE: { lat: number; lng: number }[] = [
-  { lat: 17.3448, lng: 78.5458 },
-  { lat: 17.3462, lng: 78.5595 },
-  { lat: 17.3368, lng: 78.5708 },
-  { lat: 17.332, lng: 78.5602 },
-  { lat: 17.3365, lng: 78.5472 },
+  { lat: 17.34137, lng: 78.54815 },
+  { lat: 17.34196, lng: 78.55624 },
+  { lat: 17.33848, lng: 78.5578 },
+  { lat: 17.33475, lng: 78.56227 },
+  { lat: 17.33292, lng: 78.55295 },
+  { lat: 17.33607, lng: 78.55182 },
+  { lat: 17.33888, lng: 78.54896 },
+  { lat: 17.34137, lng: 78.54815 }, // closed
 ];
 
 /**
- * Convert backend zone format ([lat, lng] tuples) to {lat, lng} objects.
- */
-export function zoneToLatLng(
-  zone: Array<[number, number]>,
-): { lat: number; lng: number }[] {
-  return zone.map(([lat, lng]) => ({ lat, lng }));
-}
-
-/**
  * Expand polygon outward from centroid by `buffer` degrees to handle GPS jitter.
+ * ~10 metres ≈ 0.00009°
  */
 function expandPolygon(
   polygon: { lat: number; lng: number }[],
@@ -40,13 +34,13 @@ function expandPolygon(
 }
 
 /**
- * Ray-casting point-in-polygon with a small buffer (~0.0005°) for GPS edge tolerance.
+ * Ray-casting point-in-polygon with a ~10 m buffer (0.00009°) for GPS edge tolerance.
  */
 export function isPointInPolygon(
   lat: number,
   lng: number,
   polygon: { lat: number; lng: number }[],
-  buffer = 0.0005,
+  buffer = 0.00009,
 ): boolean {
   const expanded = expandPolygon(polygon, buffer);
   let inside = false;
@@ -61,22 +55,4 @@ export function isPointInPolygon(
     if (intersect) inside = !inside;
   }
   return inside;
-}
-
-/**
- * Returns the effective delivery zone for a store.
- * Uses store's custom zone if useCustomZone is true and zone has >2 points,
- * otherwise falls back to the global zone.
- */
-export function getEffectiveZone(
-  store: Store | null | undefined,
-): { lat: number; lng: number }[] {
-  if (
-    store?.useCustomZone &&
-    store.customDeliveryZone &&
-    store.customDeliveryZone.length > 2
-  ) {
-    return zoneToLatLng(store.customDeliveryZone);
-  }
-  return GLOBAL_DELIVERY_ZONE;
 }

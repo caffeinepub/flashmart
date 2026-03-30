@@ -46,7 +46,7 @@ const statusConfig: Record<
     icon: Truck,
   },
   [OrderStatus.pickedUp]: {
-    label: "Picked Up",
+    label: "Out for Delivery 🛵",
     color: "bg-orange-100 text-orange-800 border-orange-300",
     icon: ShoppingBag,
   },
@@ -61,9 +61,13 @@ function OrderCard({
   order,
   idx,
   isExpired,
-}: { order: Order; idx: number; isExpired?: boolean }) {
+  onTrack,
+}: { order: Order; idx: number; isExpired?: boolean; onTrack?: () => void }) {
   const cfg = statusConfig[order.status];
   const Icon = cfg?.icon ?? Clock;
+  const canTrack =
+    order.status === OrderStatus.pickedUp ||
+    order.status === OrderStatus.riderAssigned;
 
   if (isExpired) {
     return (
@@ -99,32 +103,46 @@ function OrderCard({
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.05 * idx }}
-      className="flex items-start gap-3 p-4 bg-card border border-border rounded-xl shadow-card"
+      className="p-4 bg-card border border-border rounded-xl shadow-card"
       data-ocid={`orders.item.${idx + 1}`}
     >
-      <div className="w-9 h-9 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-        <ShoppingBag className="w-4 h-4 text-primary" />
+      <div className="flex items-start gap-3">
+        <div className="w-9 h-9 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+          <ShoppingBag className="w-4 h-4 text-primary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-sm text-foreground truncate">
+            {order.itemName}
+          </p>
+          <Badge
+            variant="outline"
+            className={`mt-1.5 text-xs gap-1 font-semibold ${
+              cfg ? cfg.color : "bg-gray-100 text-gray-700 border-gray-300"
+            }`}
+          >
+            <Icon className="w-3 h-3" />
+            {cfg ? cfg.label : order.status}
+          </Badge>
+        </div>
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-bold text-sm text-foreground truncate">
-          {order.itemName}
-        </p>
-      </div>
-      <Badge
-        variant="outline"
-        className={`text-xs flex-shrink-0 gap-1 font-semibold ${
-          cfg ? cfg.color : "bg-gray-100 text-gray-700 border-gray-300"
-        }`}
-      >
-        <Icon className="w-3 h-3" />
-        {cfg ? cfg.label : order.status}
-      </Badge>
+      {canTrack && onTrack && (
+        <Button
+          size="sm"
+          onClick={onTrack}
+          className="w-full mt-3 bg-orange-500 hover:bg-orange-600 text-white gap-1.5 text-xs font-bold"
+          data-ocid={`orders.track.button.${idx + 1}`}
+        >
+          <MapPin className="w-3.5 h-3.5" />
+          Track Order 📍
+        </Button>
+      )}
     </motion.div>
   );
 }
 
 export default function CustomerDashboard() {
-  const { currentUser, navigate, setCurrentStoreId } = useApp();
+  const { currentUser, navigate, setCurrentStoreId, setTrackingOrderId } =
+    useApp();
   const { addNotification } = useNotifications();
   const { totalItems } = useCart();
   const customerId = currentUser?.id?.toString();
@@ -682,6 +700,10 @@ export default function CustomerDashboard() {
                 order={o}
                 idx={i}
                 isExpired={expiredOrderIds.has(o.id.toString())}
+                onTrack={() => {
+                  setTrackingOrderId(o.id);
+                  navigate("order-tracking");
+                }}
               />
             ))}
           </div>

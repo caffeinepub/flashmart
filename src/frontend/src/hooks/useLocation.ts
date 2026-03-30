@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { GLOBAL_DELIVERY_ZONE, isPointInPolygon } from "../utils/geofence";
 
 export type LocationStatus =
   | "idle"
@@ -9,38 +10,6 @@ export type LocationStatus =
   | "out_of_range";
 
 const STORAGE_KEY = "flashmart_location_status";
-
-// Refined polygon delivery zone
-const deliveryZone = [
-  { lat: 17.3448, lng: 78.5458 },
-  { lat: 17.3462, lng: 78.5595 },
-  { lat: 17.3368, lng: 78.5708 },
-  { lat: 17.332, lng: 78.5602 },
-  { lat: 17.3365, lng: 78.5472 },
-];
-
-/**
- * Ray-casting point-in-polygon algorithm.
- * The polygon is automatically closed (last point connects to first).
- */
-function isPointInPolygon(
-  lat: number,
-  lng: number,
-  polygon: { lat: number; lng: number }[],
-): boolean {
-  let inside = false;
-  const n = polygon.length;
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    const xi = polygon[i].lng;
-    const yi = polygon[i].lat;
-    const xj = polygon[j].lng;
-    const yj = polygon[j].lat;
-    const intersect =
-      yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
-    if (intersect) inside = !inside;
-  }
-  return inside;
-}
 
 export function useLocation() {
   const [status, setStatus] = useState<LocationStatus>(() => {
@@ -62,7 +31,7 @@ export function useLocation() {
         const inside = isPointInPolygon(
           pos.coords.latitude,
           pos.coords.longitude,
-          deliveryZone,
+          GLOBAL_DELIVERY_ZONE,
         );
         setInZone(inside);
         setStatus(inside ? "in_range" : "out_of_range");
@@ -74,5 +43,10 @@ export function useLocation() {
     );
   }, []);
 
-  return { status, inZone, requestLocation };
+  return {
+    status,
+    inZone,
+    requestLocation,
+    deliveryZone: GLOBAL_DELIVERY_ZONE,
+  };
 }

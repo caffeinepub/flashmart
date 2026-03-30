@@ -17,12 +17,8 @@ import ConfirmModal from "../components/ConfirmModal";
 import MapPickerModal from "../components/MapPickerModal";
 import { useApp } from "../context/AppContext";
 import { useCart } from "../context/CartContext";
-import { useCreateOrder, useStoreById } from "../hooks/useQueries";
-import {
-  GLOBAL_DELIVERY_ZONE,
-  getEffectiveZone,
-  isPointInPolygon,
-} from "../utils/geofence";
+import { useCreateOrder } from "../hooks/useQueries";
+import { GLOBAL_DELIVERY_ZONE, isPointInPolygon } from "../utils/geofence";
 
 interface CustomerDetails {
   name: string;
@@ -42,8 +38,6 @@ export default function CartPage() {
   } = useCart();
   const { navigate } = useApp();
   const createOrder = useCreateOrder();
-  const { data: store } = useStoreById(currentStoreId);
-  const effectiveZone = store ? getEffectiveZone(store) : GLOBAL_DELIVERY_ZONE;
   const [confirmModal, setConfirmModal] = useState<{
     open: boolean;
     message: string;
@@ -72,10 +66,10 @@ export default function CartPage() {
     const inside = isPointInPolygon(
       pinnedLocation.lat,
       pinnedLocation.lng,
-      effectiveZone,
+      GLOBAL_DELIVERY_ZONE,
     );
     return inside ? "in_range" : "out_of_range";
-  }, [pinnedLocation, effectiveZone]);
+  }, [pinnedLocation]);
 
   const canOrder = zoneStatus === "in_range" && currentStoreId !== null;
 
@@ -103,7 +97,7 @@ export default function CartPage() {
     setPinnedLocation({ lat, lng });
     setMapOpen(false);
     setFormErrors((prev) => ({ ...prev, pin: undefined }));
-    const inside = isPointInPolygon(lat, lng, effectiveZone);
+    const inside = isPointInPolygon(lat, lng, GLOBAL_DELIVERY_ZONE);
     if (inside) {
       toast.success("Location pinned! Delivery available ✅");
     } else {
@@ -220,7 +214,7 @@ export default function CartPage() {
         initialLng={pinnedLocation?.lng}
         onConfirm={handlePinConfirm}
         onClose={() => setMapOpen(false)}
-        deliveryZone={effectiveZone}
+        deliveryZone={GLOBAL_DELIVERY_ZONE}
       />
 
       {/* Header */}
@@ -239,16 +233,6 @@ export default function CartPage() {
           Your Cart
         </h1>
       </div>
-
-      {/* Store Banner */}
-      {store && (
-        <div className="mb-4 flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2">
-          <Store className="w-4 h-4 text-green-600 flex-shrink-0" />
-          <span className="text-sm font-semibold text-green-700">
-            Shopping from: <strong>{store.name}</strong>
-          </span>
-        </div>
-      )}
 
       {items.length === 0 ? (
         <div className="text-center py-16 text-gray-500">
@@ -446,11 +430,7 @@ export default function CartPage() {
                 <p className="block text-xs font-bold text-gray-700 mb-1">
                   Pinned Location <span className="text-red-500">*</span>
                 </p>
-                <p className="text-[11px] text-gray-400 mb-2">
-                  {store?.useCustomZone
-                    ? "This store has a custom delivery zone"
-                    : "Standard delivery zone applies"}
-                </p>
+
                 {pinnedLocation ? (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">

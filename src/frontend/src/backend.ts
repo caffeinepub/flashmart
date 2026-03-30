@@ -90,7 +90,6 @@ export class ExternalBlob {
     }
 }
 export interface Store {
-    customDeliveryZone: Array<[number, number]>;
     storeId: bigint;
     name: string;
     createdAt: bigint;
@@ -101,7 +100,8 @@ export interface Store {
     category: string;
     rating: number;
     image: string;
-    useCustomZone: boolean;
+    latitude: number;
+    longitude: number;
 }
 export interface Order {
     id: bigint;
@@ -156,7 +156,7 @@ export interface backendInterface {
     addProduct(storeId: bigint, name: string, description: string, price: number, image: string): Promise<bigint>;
     assignCallerUserRole(user: Principal, role: UserRole__1): Promise<void>;
     createOrder(storeId: bigint, itemName: string, customerName: string, customerPhone: string, customerAddress: string, pinnedLatitude: number, pinnedLongitude: number): Promise<bigint>;
-    createStore(name: string, image: string, category: string, description: string, deliveryTime: string): Promise<bigint>;
+    createStore(name: string, image: string, category: string, description: string, deliveryTime: string, latitude: number, longitude: number): Promise<bigint>;
     createUserProfile(phone: string, name: string, role: UserRole): Promise<void>;
     deleteProduct(productId: bigint): Promise<void>;
     generateOtp(phone: string): Promise<string>;
@@ -184,6 +184,7 @@ export interface backendInterface {
     updateOrderStatus(orderId: bigint, newStatus: OrderStatus): Promise<void>;
     updateProduct(productId: bigint, name: string, description: string, price: number, image: string): Promise<void>;
     updateStore(storeId: bigint, name: string, image: string, category: string, description: string, deliveryTime: string): Promise<void>;
+    updateStoreLocation(storeId: bigint, latitude: number, longitude: number): Promise<void>;
     updateUserRole(user: Principal, newRole: UserRole): Promise<void>;
     verifyOtp(phone: string, code: string): Promise<boolean>;
 }
@@ -246,17 +247,17 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async createStore(arg0: string, arg1: string, arg2: string, arg3: string, arg4: string): Promise<bigint> {
+    async createStore(arg0: string, arg1: string, arg2: string, arg3: string, arg4: string, arg5: number, arg6: number): Promise<bigint> {
         if (this.processError) {
             try {
-                const result = await this.actor.createStore(arg0, arg1, arg2, arg3, arg4);
+                const result = await this.actor.createStore(arg0, arg1, arg2, arg3, arg4, arg5, arg6);
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.createStore(arg0, arg1, arg2, arg3, arg4);
+            const result = await this.actor.createStore(arg0, arg1, arg2, arg3, arg4, arg5, arg6);
             return result;
         }
     }
@@ -635,6 +636,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.updateStore(arg0, arg1, arg2, arg3, arg4, arg5);
+            return result;
+        }
+    }
+    async updateStoreLocation(arg0: bigint, arg1: number, arg2: number): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.updateStoreLocation(arg0, arg1, arg2);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.updateStoreLocation(arg0, arg1, arg2);
             return result;
         }
     }

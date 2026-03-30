@@ -289,6 +289,8 @@ export function useCreateStore() {
       category: string;
       description: string;
       deliveryTime: string;
+      latitude: number;
+      longitude: number;
     }) => {
       if (!actor) throw new Error("Not connected");
       return actor.createStore(
@@ -297,6 +299,8 @@ export function useCreateStore() {
         params.category,
         params.description,
         params.deliveryTime,
+        params.latitude,
+        params.longitude,
       );
     },
     onSuccess: () => {
@@ -352,6 +356,30 @@ export function useUpdateStore() {
   });
 }
 
+export function useUpdateStoreLocation() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      storeId: bigint;
+      latitude: number;
+      longitude: number;
+    }) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.updateStoreLocation(
+        params.storeId,
+        params.latitude,
+        params.longitude,
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["allStores"] });
+      queryClient.invalidateQueries({ queryKey: ["storeByVendor"] });
+      queryClient.invalidateQueries({ queryKey: ["storeById"] });
+    },
+  });
+}
+
 export function useSetStoreDeliveryZone() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
@@ -373,5 +401,36 @@ export function useSetStoreDeliveryZone() {
       queryClient.invalidateQueries({ queryKey: ["allStores"] });
       queryClient.invalidateQueries({ queryKey: ["storeById"] });
     },
+  });
+}
+
+// ── Delivery Location Queries ──────────────────────────────────────────────
+
+export interface DeliveryLocationResult {
+  orderId: bigint;
+  lat: number;
+  lng: number;
+  updatedAt: bigint;
+}
+
+export function useDeliveryLocation(orderId: bigint | null) {
+  const { actor, isFetching: actorFetching } = useActor();
+  return useQuery<DeliveryLocationResult | null>({
+    queryKey: ["deliveryLocation", orderId?.toString()],
+    queryFn: async () => {
+      if (!actor || orderId === null) return null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (actor as any).getDeliveryLocation(orderId);
+      if (!result || result.length === 0) return null;
+      const raw = result[0];
+      return {
+        orderId: raw.orderId ?? orderId,
+        lat: Number(raw.lat),
+        lng: Number(raw.lng),
+        updatedAt: BigInt(raw.updatedAt ?? 0n),
+      };
+    },
+    enabled: !!actor && !actorFetching && orderId !== null,
+    refetchInterval: 4_000,
   });
 }

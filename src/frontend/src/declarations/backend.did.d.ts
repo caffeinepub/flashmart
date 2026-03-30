@@ -10,6 +10,13 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export interface DeliveryLocation {
+  orderId: bigint;
+  lat: number;
+  lng: number;
+  updatedAt: bigint;
+  partnerId: Principal;
+}
 export interface Order {
   'id' : bigint,
   'customerName' : string,
@@ -70,6 +77,7 @@ export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'addProduct' : ActorMethod<[bigint, string, string, number, string], bigint>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole__1], undefined>,
+  'clearDeliveryLocation' : (orderId: bigint) => Promise<undefined>,
   'createOrder' : ActorMethod<
     [bigint, string, string, string, string, number, number],
     bigint
@@ -86,6 +94,7 @@ export interface _SERVICE {
   'getAllVendors' : ActorMethod<[], Array<UserProfile>>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole__1>,
+  'getDeliveryLocation' : (orderId: bigint) => Promise<[] | [DeliveryLocation]>,
   'getOrderById' : ActorMethod<[bigint], [] | [Order]>,
   'getOrderStatus' : ActorMethod<[bigint], [] | [OrderStatus]>,
   'getOrdersByCustomer' : ActorMethod<[Principal], Array<Order>>,
@@ -102,6 +111,7 @@ export interface _SERVICE {
     undefined
   >,
   'toggleStoreOpen' : ActorMethod<[bigint], boolean>,
+  'updateDeliveryLocation' : (orderId: bigint, lat: number, lng: number) => Promise<undefined>,
   'updateOrderStatus' : ActorMethod<[bigint, OrderStatus], undefined>,
   'updateProduct' : ActorMethod<
     [bigint, string, string, number, string],

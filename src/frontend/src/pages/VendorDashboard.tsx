@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
   Bell,
   CheckCircle2,
@@ -11,7 +10,6 @@ import {
   ImageIcon,
   Loader2,
   LogOut,
-  MapPin,
   Package,
   PackagePlus,
   Power,
@@ -27,7 +25,6 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type Order, OrderStatus, type Product } from "../backend";
 import ConfirmModal from "../components/ConfirmModal";
-import ZoneEditorModal from "../components/ZoneEditorModal";
 import { useApp } from "../context/AppContext";
 import { useNotifications } from "../context/NotificationContext";
 import {
@@ -35,7 +32,6 @@ import {
   useAllProducts,
   useDeleteProduct,
   useOrdersByStatus,
-  useSetStoreDeliveryZone,
   useStoreByVendor,
   useToggleStoreOpen,
   useUpdateOrderStatus,
@@ -486,8 +482,6 @@ export default function VendorDashboard() {
     vendorId === "anonymous" ? undefined : vendorId,
   );
   const toggleStore = useToggleStoreOpen();
-  const setZone = useSetStoreDeliveryZone();
-  const [zoneEditorOpen, setZoneEditorOpen] = useState(false);
 
   const {
     data: requestedOrders = [],
@@ -657,25 +651,6 @@ export default function VendorDashboard() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
-      <ZoneEditorModal
-        open={zoneEditorOpen}
-        onClose={() => setZoneEditorOpen(false)}
-        initialZone={store?.customDeliveryZone}
-        onSave={async (zone) => {
-          if (!store) return;
-          try {
-            await setZone.mutateAsync({
-              storeId: store.storeId,
-              zone,
-              useCustom: store.useCustomZone,
-            });
-            toast.success("Custom delivery zone saved!");
-          } catch (e: any) {
-            toast.error(e?.message || "Failed to save zone.");
-          }
-          setZoneEditorOpen(false);
-        }}
-      />
       <ConfirmModal
         open={confirmModal.open}
         message={confirmModal.message}
@@ -841,81 +816,6 @@ export default function VendorDashboard() {
                   {store.isOpen ? "Close Store" : "Open Store"}
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Delivery Zone Card */}
-          <Card
-            className="mb-4 border-blue-100 bg-blue-50/30"
-            data-ocid="vendor.zone.card"
-          >
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between gap-3 mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                    <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="font-extrabold text-sm text-gray-900">
-                      Delivery Zone
-                    </p>
-                    <p className="text-[11px] text-gray-500">
-                      {store.useCustomZone
-                        ? "Custom zone active"
-                        : "Using global zone"}
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={store.useCustomZone}
-                  onCheckedChange={async (checked) => {
-                    try {
-                      await setZone.mutateAsync({
-                        storeId: store.storeId,
-                        zone: store.customDeliveryZone,
-                        useCustom: checked,
-                      });
-                      toast.success(
-                        checked
-                          ? "Custom zone enabled"
-                          : "Switched to global zone",
-                      );
-                    } catch (e: any) {
-                      toast.error(e?.message || "Failed to update zone.");
-                    }
-                  }}
-                  disabled={setZone.isPending}
-                  data-ocid="vendor.zone.switch"
-                />
-              </div>
-              {store.useCustomZone ? (
-                <div className="flex items-center gap-2">
-                  {store.customDeliveryZone.length > 2 ? (
-                    <span className="text-xs font-semibold text-green-700 bg-green-100 border border-green-200 rounded-full px-2.5 py-0.5">
-                      ✓ Custom zone active ({store.customDeliveryZone.length}{" "}
-                      points)
-                    </span>
-                  ) : (
-                    <span className="text-xs text-orange-600 font-semibold">
-                      No zone drawn yet
-                    </span>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="ml-auto border-blue-200 text-blue-700 hover:bg-blue-50 text-xs font-bold h-7"
-                    onClick={() => setZoneEditorOpen(true)}
-                    data-ocid="vendor.zone.edit.button"
-                  >
-                    Edit Zone
-                  </Button>
-                </div>
-              ) : (
-                <p className="text-xs text-gray-400">
-                  Toggle on to define a custom delivery area for your store.
-                  Otherwise the global zone applies.
-                </p>
-              )}
             </CardContent>
           </Card>
 
