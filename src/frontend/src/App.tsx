@@ -1,6 +1,6 @@
 import { Toaster } from "@/components/ui/sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { UserRole } from "./backend";
 import { AppProvider, type AppScreen, useApp } from "./context/AppContext";
 import { CartProvider } from "./context/CartContext";
@@ -58,9 +58,10 @@ function roleToScreen(role: UserRole): AppScreen {
 
 function AppContent() {
   const { identity, clear } = useInternetIdentity();
-  const { isFetching: actorFetching } = useActor();
+  const { actor, isFetching: actorFetching } = useActor();
   const { screen, navigate, setCurrentUser } = useApp();
   const queryClient = useQueryClient();
+  const keepAliveRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const {
     data: userProfile,
     isFetched: profileFetched,
@@ -68,6 +69,26 @@ function AppContent() {
   } = useCallerProfile();
 
   const isAuthenticated = !!identity;
+
+  // Keep-alive: ping the canister every 90 seconds to prevent it from stopping
+  useEffect(() => {
+    if (!actor) return;
+
+    const ping = () => {
+      actor.getAllStores().catch(() => {
+        // silent - just keeping the canister warm
+      });
+    };
+
+    // Ping immediately on actor ready
+    ping();
+
+    keepAliveRef.current = setInterval(ping, 90_000);
+
+    return () => {
+      if (keepAliveRef.current) clearInterval(keepAliveRef.current);
+    };
+  }, [actor]);
 
   useEffect(() => {
     if (actorFetching) return;
