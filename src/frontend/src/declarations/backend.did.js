@@ -93,7 +93,7 @@ export const idlService = IDL.Service({
       [],
     ),
   'createStore' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Float64, IDL.Float64],
       [IDL.Int],
       [],
     ),
@@ -240,7 +240,7 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'createStore' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Float64, IDL.Float64],
         [IDL.Int],
         [],
       ),

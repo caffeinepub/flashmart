@@ -156,7 +156,7 @@ export interface backendInterface {
     addProduct(storeId: bigint, name: string, description: string, price: number, image: string): Promise<bigint>;
     assignCallerUserRole(user: Principal, role: UserRole__1): Promise<void>;
     createOrder(storeId: bigint, itemName: string, customerName: string, customerPhone: string, customerAddress: string, pinnedLatitude: number, pinnedLongitude: number): Promise<bigint>;
-    createStore(name: string, image: string, category: string, description: string, deliveryTime: string, latitude?: number, longitude?: number): Promise<bigint>;
+    createStore(name: string, image: string, category: string, description: string, deliveryTime: string, latitude: number, longitude: number): Promise<bigint>;
     createUserProfile(phone: string, name: string, role: UserRole): Promise<void>;
     deleteProduct(productId: bigint): Promise<void>;
     generateOtp(phone: string): Promise<string>;
@@ -247,17 +247,17 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async createStore(arg0: string, arg1: string, arg2: string, arg3: string, arg4: string, arg5?: number, arg6?: number): Promise<bigint> {
+    async createStore(arg0: string, arg1: string, arg2: string, arg3: string, arg4: string, arg5: number, arg6: number): Promise<bigint> {
         if (this.processError) {
             try {
-                const result = await this.actor.createStore(arg0, arg1, arg2, arg3, arg4);
+                const result = await this.actor.createStore(arg0, arg1, arg2, arg3, arg4, arg5, arg6);
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.createStore(arg0, arg1, arg2, arg3, arg4);
+            const result = await this.actor.createStore(arg0, arg1, arg2, arg3, arg4, arg5, arg6);
             return result;
         }
     }

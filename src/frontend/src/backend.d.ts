@@ -73,7 +73,7 @@ export interface backendInterface {
     addProduct(storeId: bigint, name: string, description: string, price: number, image: string): Promise<bigint>;
     assignCallerUserRole(user: Principal, role: UserRole__1): Promise<void>;
     createOrder(storeId: bigint, itemName: string, customerName: string, customerPhone: string, customerAddress: string, pinnedLatitude: number, pinnedLongitude: number): Promise<bigint>;
-    createStore(name: string, image: string, category: string, description: string, deliveryTime: string, latitude?: number, longitude?: number): Promise<bigint>;
+    createStore(name: string, image: string, category: string, description: string, deliveryTime: string, latitude: number, longitude: number): Promise<bigint>;
     createUserProfile(phone: string, name: string, role: UserRole): Promise<void>;
     deleteProduct(productId: bigint): Promise<void>;
     generateOtp(phone: string): Promise<string>;

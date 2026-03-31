@@ -293,12 +293,14 @@ export function useCreateStore() {
       longitude: number;
     }) => {
       if (!actor) throw new Error("Not connected");
-      return actor.createStore(
+      return (actor as any).createStore(
         params.name,
         params.image,
         params.category,
         params.description,
         params.deliveryTime,
+        params.latitude,
+        params.longitude,
       );
     },
     onSuccess: () => {

@@ -82,7 +82,7 @@ export interface _SERVICE {
     [bigint, string, string, string, string, number, number],
     bigint
   >,
-  'createStore' : ActorMethod<[string, string, string, string, string], bigint>,
+  'createStore' : ActorMethod<[string, string, string, string, string, number, number], bigint>,
   'createUserProfile' : ActorMethod<[string, string, UserRole], undefined>,
   'deleteProduct' : ActorMethod<[bigint], undefined>,
   'generateOtp' : ActorMethod<[string], string>,
