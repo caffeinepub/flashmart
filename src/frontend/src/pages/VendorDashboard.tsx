@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Save,
   Store,
+  Timer,
   Trash2,
   X,
   XCircle,
@@ -27,6 +28,7 @@ import { type Order, OrderStatus, type Product } from "../backend";
 import ConfirmModal from "../components/ConfirmModal";
 import { useApp } from "../context/AppContext";
 import { useNotifications } from "../context/NotificationContext";
+import { formatCountdown, useOrderCountdown } from "../hooks/useOrderCountdown";
 import {
   useAddProduct,
   useAllProducts,
@@ -455,6 +457,22 @@ function ManageProductsSection({
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function PendingOrderCountdown({ orderId }: { orderId: string }) {
+  const { secondsLeft, isExpired } = useOrderCountdown(orderId);
+  if (isExpired) return null;
+  return (
+    <div className="mt-2 flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+      <Timer className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+      <span className="text-xs font-bold text-amber-700">
+        Accept within{" "}
+        <span className="font-mono tabular-nums">
+          {formatCountdown(secondsLeft)}
+        </span>
+      </span>
     </div>
   );
 }
@@ -892,6 +910,9 @@ export default function VendorDashboard() {
                         </Badge>
                       </div>
                     </div>
+                    {!expiredOrderIds.has(order.id.toString()) && (
+                      <PendingOrderCountdown orderId={order.id.toString()} />
+                    )}
                     {expiredOrderIds.has(order.id.toString()) ? (
                       <div className="mt-3 flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                         <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />

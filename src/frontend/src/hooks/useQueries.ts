@@ -299,8 +299,6 @@ export function useCreateStore() {
         params.category,
         params.description,
         params.deliveryTime,
-        params.latitude,
-        params.longitude,
       );
     },
     onSuccess: () => {
