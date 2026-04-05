@@ -246,7 +246,9 @@ export function useAllStores() {
     queryKey: ["allStores"],
     queryFn: async () => {
       if (!actor) return [];
-      return actor.getAllStores();
+      const stores = await actor.getAllStores();
+      console.log("[getAllStores] Fetched stores:", stores.length, stores);
+      return stores;
     },
     enabled: !!actor && !actorFetching,
     refetchInterval: 10_000,
@@ -260,10 +262,15 @@ export function useStoreByVendor(vendorId: string | undefined) {
     queryFn: async () => {
       if (!actor || !vendorId) return null;
       const { Principal } = await import("@dfinity/principal");
-      return actor.getStoreByVendor(Principal.fromText(vendorId));
+      const store = await actor.getStoreByVendor(Principal.fromText(vendorId));
+      console.log("[getStoreByVendor] vendorId:", vendorId, "result:", store);
+      return store;
     },
     enabled: !!actor && !actorFetching && !!vendorId,
     retry: false,
+    staleTime: 0,
+    refetchOnMount: true,
+    refetchInterval: 5_000,
   });
 }
 
@@ -293,7 +300,8 @@ export function useCreateStore() {
       longitude: number;
     }) => {
       if (!actor) throw new Error("Not connected");
-      return (actor as any).createStore(
+      console.log("[createStore] Calling backend with params:", params);
+      const storeId = await actor.createStore(
         params.name,
         params.image,
         params.category,
@@ -302,10 +310,19 @@ export function useCreateStore() {
         params.latitude,
         params.longitude,
       );
+      console.log("[createStore] Response storeId:", storeId);
+      return storeId;
     },
-    onSuccess: () => {
+    onSuccess: (storeId) => {
+      console.log(
+        "[createStore] Success, invalidating queries. storeId:",
+        storeId,
+      );
       queryClient.invalidateQueries({ queryKey: ["allStores"] });
       queryClient.invalidateQueries({ queryKey: ["storeByVendor"] });
+    },
+    onError: (error) => {
+      console.error("[createStore] Error:", error);
     },
   });
 }
@@ -380,29 +397,7 @@ export function useUpdateStoreLocation() {
   });
 }
 
-export function useSetStoreDeliveryZone() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      storeId,
-      zone,
-      useCustom,
-    }: {
-      storeId: bigint;
-      zone: Array<[number, number]>;
-      useCustom: boolean;
-    }) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.setStoreDeliveryZone(storeId, zone, useCustom);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["storeByVendor"] });
-      queryClient.invalidateQueries({ queryKey: ["allStores"] });
-      queryClient.invalidateQueries({ queryKey: ["storeById"] });
-    },
-  });
-}
+// setStoreDeliveryZone removed - using global delivery zone only
 
 // ── Delivery Location Queries ──────────────────────────────────────────────
 
