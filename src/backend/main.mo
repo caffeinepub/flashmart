@@ -99,6 +99,11 @@ actor {
     updatedAt : Int;
     partnerId : Principal;
   };
+  public type ResetLog = {
+    timestamp : Int;
+    caller : Principal;
+  };
+
 
   module UserProfile {
     public func compare(p1 : UserProfile, p2 : UserProfile) : Order.Order {
@@ -116,6 +121,7 @@ actor {
   var nextOrderId : Nat = 1;
   var nextProductId : Nat = 1;
   var nextStoreId : Nat = 1;
+  var resetLogs : List.List<ResetLog> = List.empty();
 
   func isAppAdmin(principal : Principal) : Bool {
     switch (users.get(principal)) {
@@ -555,6 +561,42 @@ actor {
   // Clean up location after delivery is complete
   public shared ({ caller }) func clearDeliveryLocation(orderId : Int) : async () {
     deliveryLocations.remove(orderId);
+  };
+
+  // ==========================================
+  // ADMIN: RESET ALL DATA
+  // ==========================================
+
+  public shared ({ caller }) func resetAllData(adminPassword : Text) : async Text {
+    if (adminPassword != "FLASHMART007") {
+      Runtime.trap("Unauthorized: Invalid admin password");
+    };
+
+    // Clear all data maps
+    users.clear();
+    stores.clear();
+    products.clear();
+    orders.clear();
+    deliveryLocations.clear();
+    otps.clear();
+
+    // Reset all ID counters
+    nextOrderId := 1;
+    nextProductId := 1;
+    nextStoreId := 1;
+
+    // Log the reset action
+    let logEntry : ResetLog = {
+      timestamp = Time.now();
+      caller;
+    };
+    resetLogs.add(logEntry);
+
+    "Reset complete at " # Time.now().toText();
+  };
+
+  public query func getResetLogs() : async [ResetLog] {
+    resetLogs.toArray();
   };
 
 };

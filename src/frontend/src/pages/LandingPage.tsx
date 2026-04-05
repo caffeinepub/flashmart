@@ -299,6 +299,18 @@ export default function LandingPage() {
           </Button>
         </motion.div>
       </section>
+
+      {/* Subtle admin link */}
+      <div className="pb-6 text-center">
+        <button
+          type="button"
+          onClick={() => navigate("admin-reset")}
+          className="text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors underline-offset-2 hover:underline"
+          data-ocid="landing.admin.link"
+        >
+          Admin
+        </button>
+      </div>
     </div>
   );
 }

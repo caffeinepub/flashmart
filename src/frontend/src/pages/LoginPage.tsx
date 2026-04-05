@@ -18,6 +18,27 @@ function validatePhone(phone: string): string | null {
   return null;
 }
 
+/** Generate a 6-digit OTP locally as fallback when backend is unavailable */
+function generateLocalOtp(phone: string): string {
+  const seed =
+    Date.now() + phone.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+  const raw = seed % 900000;
+  return String(100000 + raw);
+}
+
+/** Check if an error is an IC0508 stopped-canister error */
+function isCanisterStoppedError(e: unknown): boolean {
+  const msg =
+    e && typeof e === "object" && "message" in e
+      ? String((e as { message: unknown }).message)
+      : String(e);
+  return (
+    msg.includes("IC0508") ||
+    msg.includes("stopped") ||
+    msg.includes("Canister")
+  );
+}
+
 export default function LoginPage() {
   const { navigate, setCurrentPhone, setDemoOtp } = useApp();
   const [phone, setPhone] = useState("+91");
@@ -25,17 +46,22 @@ export default function LoginPage() {
   const [sendError, setSendError] = useState("");
   const [loading, setLoading] = useState(false);
   const [sentOtp, setSentOtp] = useState("");
+  const [isFallback, setIsFallback] = useState(false);
   const actorRef = useRef<Awaited<
     ReturnType<typeof createActorWithConfig>
   > | null>(null);
 
   // Pre-warm actor on mount
   useEffect(() => {
+    console.log("[OTP] Pre-warming backend actor...");
     createActorWithConfig()
       .then((a) => {
         actorRef.current = a;
+        console.log("[OTP] Actor pre-warmed successfully");
       })
-      .catch(() => {});
+      .catch((e) => {
+        console.warn("[OTP] Actor pre-warm failed:", e);
+      });
   }, []);
 
   // Auto-navigate to otp-verify 2 seconds after OTP is generated
@@ -56,27 +82,57 @@ export default function LoginPage() {
     setPhoneError("");
     setSendError("");
     setLoading(true);
+    setIsFallback(false);
+
+    console.log("[OTP] Requesting OTP for", phone);
+
     try {
       // Use cached actor or create a fresh one
       let actor = actorRef.current;
       if (!actor) {
+        console.log("[OTP] Creating fresh actor...");
         actor = await createActorWithConfig();
         actorRef.current = actor;
       }
+
+      console.log("[OTP] Calling backend generateOtp...");
       const otp = await actor.generateOtp(phone.trim());
+      console.log("[OTP] Backend returned OTP successfully");
+
       setSentOtp(otp);
       setDemoOtp(otp);
       setCurrentPhone(phone.trim());
+      setIsFallback(false);
       toast.success("OTP sent! Auto-redirecting in 2 seconds…");
     } catch (e: unknown) {
-      const msg =
-        e && typeof e === "object" && "message" in e
-          ? String((e as { message: unknown }).message)
-          : "Failed to send OTP. Please try again.";
-      setSendError(msg);
-      toast.error(msg);
+      const stopped = isCanisterStoppedError(e);
+      console.error("[OTP] Backend call failed:", e);
+      console.warn(
+        "[OTP] Canister stopped:",
+        stopped,
+        "— using local fallback OTP",
+      );
+
       // Reset actor so next attempt tries fresh
       actorRef.current = null;
+
+      // Fallback: generate OTP locally
+      const localOtp = generateLocalOtp(phone.trim());
+      setSentOtp(localOtp);
+      setDemoOtp(localOtp);
+      setCurrentPhone(phone.trim());
+      setIsFallback(true);
+
+      if (stopped) {
+        toast.warning("Backend temporarily unavailable — using test OTP.");
+      } else {
+        const msg =
+          e && typeof e === "object" && "message" in e
+            ? String((e as { message: unknown }).message)
+            : "Backend error";
+        console.error("[OTP] Non-stop error:", msg);
+        toast.warning("Could not reach backend — using test OTP.");
+      }
     } finally {
       setLoading(false);
     }
@@ -175,26 +231,52 @@ export default function LoginPage() {
               initial={{ opacity: 0, scale: 0.97 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.3 }}
-              className="bg-amber-50 border-2 border-amber-400 rounded-xl p-4 space-y-3"
+              className={`border-2 rounded-xl p-4 space-y-3 ${
+                isFallback
+                  ? "bg-orange-50 border-orange-400"
+                  : "bg-amber-50 border-amber-400"
+              }`}
               data-ocid="login.demo_otp.panel"
             >
               <div className="flex gap-2 items-start">
-                <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <Info
+                  className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
+                    isFallback ? "text-orange-600" : "text-amber-600"
+                  }`}
+                />
                 <div>
-                  <p className="text-xs font-bold text-amber-800 uppercase tracking-wide">
-                    Demo OTP — Use this code:
+                  <p
+                    className={`text-xs font-bold uppercase tracking-wide ${
+                      isFallback ? "text-orange-800" : "text-amber-800"
+                    }`}
+                  >
+                    {isFallback
+                      ? "Test OTP (backend offline) — Use this code:"
+                      : "Demo OTP — Use this code:"}
                   </p>
-                  <p className="text-3xl font-mono font-extrabold text-amber-900 tracking-[0.3em] mt-1">
+                  <p
+                    className={`text-3xl font-mono font-extrabold tracking-[0.3em] mt-1 ${
+                      isFallback ? "text-orange-900" : "text-amber-900"
+                    }`}
+                  >
                     {sentOtp}
                   </p>
-                  <p className="text-xs text-amber-700 mt-1 font-medium">
+                  <p
+                    className={`text-xs mt-1 font-medium ${
+                      isFallback ? "text-orange-700" : "text-amber-700"
+                    }`}
+                  >
                     Auto-redirecting in 2 seconds…
                   </p>
                 </div>
               </div>
               <Button
                 onClick={handleCopyAndContinue}
-                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm"
+                className={`w-full text-white font-bold text-sm ${
+                  isFallback
+                    ? "bg-orange-500 hover:bg-orange-600"
+                    : "bg-amber-500 hover:bg-amber-600"
+                }`}
                 data-ocid="login.copy_continue.button"
               >
                 <Copy className="w-4 h-4 mr-2" />

@@ -429,3 +429,21 @@ export function useDeliveryLocation(orderId: bigint | null) {
     refetchInterval: 4_000,
   });
 }
+
+// ── Admin Reset Queries ────────────────────────────────────────────────────
+
+export function useResetAllData() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (adminPassword: string) => {
+      if (!actor) throw new Error("Not connected");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (actor as any).resetAllData(adminPassword) as Promise<string>;
+    },
+    onSuccess: () => {
+      // Invalidate all queries so UI reflects fresh state
+      queryClient.clear();
+    },
+  });
+}

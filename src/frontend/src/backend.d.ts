@@ -8,18 +8,25 @@ export interface None {
 }
 export type Option<T> = Some<T> | None;
 export interface Store {
+    latitude: number;
     storeId: bigint;
     name: string;
     createdAt: bigint;
     description: string;
     isOpen: boolean;
     deliveryTime: string;
+    longitude: number;
     vendorId: Principal;
     category: string;
     rating: number;
     image: string;
-    latitude: number;
-    longitude: number;
+}
+export interface DeliveryLocation {
+    lat: number;
+    lng: number;
+    orderId: bigint;
+    partnerId: Principal;
+    updatedAt: bigint;
 }
 export interface Order {
     id: bigint;
@@ -51,6 +58,11 @@ export interface UserProfile {
     role: UserRole;
     phone: string;
 }
+export interface ResetLog {
+    timestamp: bigint;
+    caller: Principal;
+}
+
 export enum OrderStatus {
     riderAssigned = "riderAssigned",
     requested = "requested",
@@ -72,6 +84,7 @@ export enum UserRole__1 {
 export interface backendInterface {
     addProduct(storeId: bigint, name: string, description: string, price: number, image: string): Promise<bigint>;
     assignCallerUserRole(user: Principal, role: UserRole__1): Promise<void>;
+    clearDeliveryLocation(orderId: bigint): Promise<void>;
     createOrder(storeId: bigint, itemName: string, customerName: string, customerPhone: string, customerAddress: string, pinnedLatitude: number, pinnedLongitude: number): Promise<bigint>;
     createStore(name: string, image: string, category: string, description: string, deliveryTime: string, latitude: number, longitude: number): Promise<bigint>;
     createUserProfile(phone: string, name: string, role: UserRole): Promise<void>;
@@ -85,6 +98,7 @@ export interface backendInterface {
     getAllVendors(): Promise<Array<UserProfile>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole__1>;
+    getDeliveryLocation(orderId: bigint): Promise<DeliveryLocation | null>;
     getOrderById(orderId: bigint): Promise<Order | null>;
     getOrderStatus(orderId: bigint): Promise<OrderStatus | null>;
     getOrdersByCustomer(customer: Principal): Promise<Array<Order>>;
@@ -97,10 +111,13 @@ export interface backendInterface {
     isNewUser(phone: string): Promise<boolean>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     toggleStoreOpen(storeId: bigint): Promise<boolean>;
+    updateDeliveryLocation(orderId: bigint, lat: number, lng: number): Promise<void>;
     updateOrderStatus(orderId: bigint, newStatus: OrderStatus): Promise<void>;
     updateProduct(productId: bigint, name: string, description: string, price: number, image: string): Promise<void>;
     updateStore(storeId: bigint, name: string, image: string, category: string, description: string, deliveryTime: string): Promise<void>;
     updateStoreLocation(storeId: bigint, latitude: number, longitude: number): Promise<void>;
+    getResetLogs(): Promise<Array<ResetLog>>;
+    resetAllData(adminPassword: string): Promise<string>;
     updateUserRole(user: Principal, newRole: UserRole): Promise<void>;
     verifyOtp(phone: string, code: string): Promise<boolean>;
 }

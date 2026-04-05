@@ -14,7 +14,8 @@ export type AppScreen =
   | "store-detail"
   | "create-store"
   | "global-search"
-  | "order-tracking";
+  | "order-tracking"
+  | "admin-reset";
 
 interface AppContextType {
   screen: AppScreen;

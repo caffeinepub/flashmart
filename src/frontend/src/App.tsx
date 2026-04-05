@@ -12,6 +12,7 @@ import { useCallerProfile } from "./hooks/useQueries";
 import Footer from "./components/Footer";
 import Header from "./components/Header";
 import ProtectedRoute from "./components/ProtectedRoute";
+import AdminResetPage from "./pages/AdminResetPage";
 import CartPage from "./pages/CartPage";
 import CreateStorePage from "./pages/CreateStorePage";
 import CustomerDashboard from "./pages/CustomerDashboard";
@@ -43,6 +44,9 @@ const DASHBOARD_SCREENS: AppScreen[] = [
   "order-tracking",
 ];
 
+// Screens accessible without authentication
+const PUBLIC_SCREENS: AppScreen[] = ["landing", "admin-reset"];
+
 function roleToScreen(role: UserRole): AppScreen {
   switch (role) {
     case UserRole.customer:
@@ -70,28 +74,38 @@ function AppContent() {
 
   const isAuthenticated = !!identity;
 
-  // Keep-alive: ping the canister every 90 seconds to prevent it from stopping
+  // Keep-alive: ping the canister every 60 seconds and also on tab focus
   useEffect(() => {
     if (!actor) return;
 
     const ping = () => {
-      actor.getAllStores().catch(() => {
-        // silent - just keeping the canister warm
+      console.log("[KeepAlive] Pinging canister...");
+      actor.getAllStores().catch((e) => {
+        console.warn("[KeepAlive] Ping failed:", e);
       });
     };
 
-    // Ping immediately on actor ready
     ping();
+    keepAliveRef.current = setInterval(ping, 60_000);
 
-    keepAliveRef.current = setInterval(ping, 90_000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        console.log("[KeepAlive] Tab became visible, pinging canister");
+        ping();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       if (keepAliveRef.current) clearInterval(keepAliveRef.current);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [actor]);
 
   useEffect(() => {
     if (actorFetching) return;
+    // Admin reset screen is always accessible without auth
+    if (PUBLIC_SCREENS.includes(screen)) return;
 
     if (!isAuthenticated) {
       if (DASHBOARD_SCREENS.includes(screen) || AUTH_SCREENS.includes(screen)) {
@@ -179,6 +193,8 @@ function AppContent() {
         );
       case "global-search":
         return <GlobalSearchPage />;
+      case "admin-reset":
+        return <AdminResetPage />;
       default:
         return <LandingPage />;
     }
