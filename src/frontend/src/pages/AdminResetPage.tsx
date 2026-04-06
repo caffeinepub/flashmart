@@ -93,7 +93,7 @@ export default function AdminResetPage() {
       navigate("landing");
     } catch (err: unknown) {
       console.error("[AdminReset] Error:", err);
-      setValidationError("Invalid admin credentials");
+      setValidationError("Reset failed: backend error. Please try again.");
     }
   };
 
