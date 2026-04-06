@@ -103,17 +103,17 @@ export default function OrderTrackingPage() {
     if (isPending && isExpired && !expiredNotifFired.current) {
       expiredNotifFired.current = true;
       addNotification({
-        title: "Order Expired",
+        title: "Riva: Order Expired",
         message: "Your order expired. Try again.",
         type: "order",
       });
       // Mark expired in localStorage
       try {
-        const stored = localStorage.getItem("flashmart_expired_orders");
+        const stored = localStorage.getItem("riva_expired_orders");
         const ids: string[] = stored ? JSON.parse(stored) : [];
         if (orderId && !ids.includes(orderId)) {
           ids.push(orderId);
-          localStorage.setItem("flashmart_expired_orders", JSON.stringify(ids));
+          localStorage.setItem("riva_expired_orders", JSON.stringify(ids));
         }
       } catch {}
     }

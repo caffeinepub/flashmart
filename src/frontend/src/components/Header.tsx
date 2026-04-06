@@ -48,8 +48,8 @@ export default function Header({ onLogout }: HeaderProps) {
               <Zap className="w-4 h-4 text-primary-foreground fill-current" />
             </div>
             <span className="text-lg font-bold">
-              <span className="text-foreground">Flash</span>
-              <span className="text-primary">Mart</span>
+              <span className="text-foreground">Ri</span>
+              <span className="text-primary">va</span>
             </span>
           </button>
 

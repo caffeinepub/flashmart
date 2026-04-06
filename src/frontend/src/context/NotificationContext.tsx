@@ -29,7 +29,7 @@ interface NotificationContextType {
   clearAll: () => void;
 }
 
-const STORAGE_KEY = "flashmart_notifications";
+const STORAGE_KEY = "riva_notifications";
 const MAX_NOTIFICATIONS = 50;
 
 const notificationSound = new Audio(

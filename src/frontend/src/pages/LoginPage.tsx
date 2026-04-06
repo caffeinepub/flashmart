@@ -156,7 +156,7 @@ export default function LoginPage() {
             <Zap className="w-6 h-6 text-white fill-current" />
           </div>
           <h1 className="text-2xl font-bold text-foreground">
-            Welcome to FlashMart
+            Welcome to Riva
           </h1>
           <p className="text-sm text-foreground/70 font-medium mt-1">
             Enter your phone number to continue

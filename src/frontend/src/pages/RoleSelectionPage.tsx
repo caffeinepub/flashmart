@@ -27,7 +27,7 @@ export default function RoleSelectionPage() {
     try {
       await actor.createUserProfile(
         currentPhone,
-        name.trim() || "FlashMart User",
+        name.trim() || "Riva User",
         UserRole.customer,
       );
       const profile = await actor.getCallerUserProfile();
@@ -36,7 +36,7 @@ export default function RoleSelectionPage() {
         queryClient.setQueryData(["callerProfile"], profile);
       }
       navigate("customer-dashboard");
-      toast.success("Profile created! Welcome to FlashMart.");
+      toast.success("Profile created! Welcome to Riva.");
     } catch (e: any) {
       toast.error(e?.message || "Failed to create profile.");
     } finally {
@@ -57,7 +57,7 @@ export default function RoleSelectionPage() {
             Choose Your Role
           </h1>
           <p className="text-sm text-foreground/70 font-medium mt-1">
-            How will you use FlashMart?
+            How will you use Riva?
           </p>
         </div>
 

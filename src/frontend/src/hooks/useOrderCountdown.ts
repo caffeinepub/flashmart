@@ -16,7 +16,7 @@ export function useOrderCountdown(orderId: string | null): {
     if (!orderId) return 0;
     try {
       const timestamps: Record<string, number> = JSON.parse(
-        localStorage.getItem("flashmart_order_timestamps") || "{}",
+        localStorage.getItem("riva_order_timestamps") || "{}",
       );
       const createdAt = timestamps[orderId];
       if (!createdAt) return 0;
@@ -33,7 +33,7 @@ export function useOrderCountdown(orderId: string | null): {
     const compute = () => {
       try {
         const timestamps: Record<string, number> = JSON.parse(
-          localStorage.getItem("flashmart_order_timestamps") || "{}",
+          localStorage.getItem("riva_order_timestamps") || "{}",
         );
         const createdAt = timestamps[orderId];
         if (!createdAt) {

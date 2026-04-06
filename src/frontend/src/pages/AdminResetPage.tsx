@@ -123,7 +123,7 @@ export default function AdminResetPage() {
           </div>
           <div>
             <h1 className="text-lg font-bold text-foreground leading-tight">
-              FlashMart Admin
+              Riva Admin
             </h1>
             <p className="text-xs text-muted-foreground">Reset Data Control</p>
           </div>

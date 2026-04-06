@@ -114,9 +114,12 @@ export default function LandingPage() {
                 <span className="text-primary">nearby stores</span> delivered
                 instantly.
               </h1>
+              <p className="text-white/90 text-lg sm:text-xl font-semibold mb-2">
+                Why walk? Get it in minutes.
+              </p>
               <p className="text-white/85 text-base sm:text-lg mb-8">
-                FlashMart connects you with local vendors and delivery partners
-                — groceries, medicines, hardware, and more.
+                Riva connects you with local vendors and delivery partners —
+                groceries, medicines, hardware, and more.
               </p>
               <div className="flex flex-wrap gap-3">
                 <Button
@@ -183,7 +186,7 @@ export default function LandingPage() {
           className="text-center mb-10"
         >
           <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
-            Who is FlashMart for?
+            Who is Riva for?
           </h2>
           <p className="text-foreground/70 font-medium">
             Join as a customer, vendor, or delivery partner.
@@ -285,7 +288,7 @@ export default function LandingPage() {
             Ready to get started?
           </h2>
           <p className="text-foreground/70 font-medium mb-6">
-            Join thousands of customers and vendors on FlashMart.
+            Join thousands of customers and vendors on Riva.
           </p>
           <Button
             size="lg"

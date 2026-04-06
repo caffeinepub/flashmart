@@ -153,7 +153,7 @@ export default function CustomerDashboard() {
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [pushDismissed, setPushDismissed] = useState(
     () =>
-      localStorage.getItem("flashmart_push_dismissed") === "1" ||
+      localStorage.getItem("riva_push_dismissed") === "1" ||
       (typeof window !== "undefined" &&
         "Notification" in window &&
         Notification.permission !== "default"),
@@ -168,7 +168,7 @@ export default function CustomerDashboard() {
   // ── Order Expiry Logic ──────────────────────────────────────────────────────────
   const [expiredOrderIds, setExpiredOrderIds] = useState<Set<string>>(() => {
     try {
-      const stored = localStorage.getItem("flashmart_expired_orders");
+      const stored = localStorage.getItem("riva_expired_orders");
       return stored ? new Set(JSON.parse(stored)) : new Set();
     } catch {
       return new Set();
@@ -192,7 +192,7 @@ export default function CustomerDashboard() {
             (() => {
               try {
                 const ts: Record<string, number> = JSON.parse(
-                  localStorage.getItem("flashmart_order_timestamps") || "{}",
+                  localStorage.getItem("riva_order_timestamps") || "{}",
                 );
                 const createdAt = ts[idStr];
                 return createdAt
@@ -210,7 +210,7 @@ export default function CustomerDashboard() {
               itemName: order.itemName,
             });
             addNotification({
-              title: "Order Expired ⏳",
+              title: "Riva: Order Expired ⏳",
               message: `No vendor accepted your order for "${order.itemName}". Tap to reorder.`,
               type: "order",
             });
@@ -218,7 +218,7 @@ export default function CustomerDashboard() {
         }
         if (changed) {
           localStorage.setItem(
-            "flashmart_expired_orders",
+            "riva_expired_orders",
             JSON.stringify([...next]),
           );
           return next;
@@ -245,19 +245,19 @@ export default function CustomerDashboard() {
       if (prev && prev !== curr) {
         if (curr === OrderStatus.storeConfirmed) {
           addNotification({
-            title: "Order Accepted ✅",
+            title: "Riva: Order Accepted ✅",
             message: `A vendor accepted your order for ${order.itemName}!`,
             type: "order",
           });
         } else if (curr === OrderStatus.riderAssigned) {
           addNotification({
-            title: "Out for Delivery 🚴",
+            title: "Riva: Out for Delivery 🚴",
             message: `Your ${order.itemName} is on the way!`,
             type: "order",
           });
         } else if (curr === OrderStatus.delivered) {
           addNotification({
-            title: "Delivered! 🎉",
+            title: "Riva: Delivered! 🎉",
             message: `Your ${order.itemName} has been delivered. Enjoy!`,
             type: "order",
           });
@@ -279,9 +279,7 @@ export default function CustomerDashboard() {
     const today = new Date().toDateString();
     const stored = (() => {
       try {
-        return JSON.parse(
-          localStorage.getItem("flashmart_last_offer_slot") || "{}",
-        );
+        return JSON.parse(localStorage.getItem("riva_last_offer_slot") || "{}");
       } catch {
         return {};
       }
@@ -289,15 +287,15 @@ export default function CustomerDashboard() {
     if (stored.date === today && stored.slot === slot) return;
     const offerMap: Record<string, { title: string; message: string }> = {
       morning: {
-        title: "Good morning! ☀️",
+        title: "Riva: Good morning! ☀️",
         message: "Only for you 🎯 — Fresh breakfast deals just dropped",
       },
       lunch: {
-        title: "Lunchtime deals 🍱",
+        title: "Riva: Lunchtime deals 🍱",
         message: "People near you are ordering lunch right now",
       },
       evening: {
-        title: "Evening snacks 🌙",
+        title: "Riva: Evening snacks 🌙",
         message: "Last chance ⏳ — Today's best deals end at midnight",
       },
     };
@@ -308,7 +306,7 @@ export default function CustomerDashboard() {
       type: "offer",
     });
     localStorage.setItem(
-      "flashmart_last_offer_slot",
+      "riva_last_offer_slot",
       JSON.stringify({ date: today, slot }),
     );
   }, []);
@@ -456,7 +454,7 @@ export default function CustomerDashboard() {
               onClick={() => {
                 Notification.requestPermission().then(() => {
                   setPushDismissed(true);
-                  localStorage.setItem("flashmart_push_dismissed", "1");
+                  localStorage.setItem("riva_push_dismissed", "1");
                 });
               }}
             >
@@ -468,7 +466,7 @@ export default function CustomerDashboard() {
               data-ocid="notifications.push_dismiss.button"
               onClick={() => {
                 setPushDismissed(true);
-                localStorage.setItem("flashmart_push_dismissed", "1");
+                localStorage.setItem("riva_push_dismissed", "1");
               }}
               aria-label="Dismiss"
             >

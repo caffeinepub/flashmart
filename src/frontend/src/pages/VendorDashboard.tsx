@@ -480,7 +480,7 @@ function PendingOrderCountdown({ orderId }: { orderId: string }) {
 function isOrderExpiredLocally(orderId: string): boolean {
   try {
     const timestamps: Record<string, number> = JSON.parse(
-      localStorage.getItem("flashmart_order_timestamps") || "{}",
+      localStorage.getItem("riva_order_timestamps") || "{}",
     );
     const createdAt = timestamps[orderId];
     if (!createdAt) return false;
@@ -513,7 +513,7 @@ export default function VendorDashboard() {
   const [declining, setDeclining] = useState<Set<string>>(new Set());
   const [expiredOrderIds, setExpiredOrderIds] = useState<Set<string>>(() => {
     try {
-      const stored = localStorage.getItem("flashmart_expired_orders");
+      const stored = localStorage.getItem("riva_expired_orders");
       return stored ? new Set(JSON.parse(stored)) : new Set();
     } catch {
       return new Set();
@@ -555,7 +555,7 @@ export default function VendorDashboard() {
   useEffect(() => {
     const interval = setInterval(() => {
       try {
-        const stored = localStorage.getItem("flashmart_expired_orders");
+        const stored = localStorage.getItem("riva_expired_orders");
         if (stored) {
           const ids = new Set<string>(JSON.parse(stored));
           for (const order of requestedOrders) {
@@ -563,7 +563,7 @@ export default function VendorDashboard() {
             if (!ids.has(idStr) && isOrderExpiredLocally(idStr)) {
               ids.add(idStr);
               localStorage.setItem(
-                "flashmart_expired_orders",
+                "riva_expired_orders",
                 JSON.stringify([...ids]),
               );
             }
@@ -597,7 +597,7 @@ export default function VendorDashboard() {
       setShowNewOrderPopup(true);
       setTimeout(() => setShowNewOrderPopup(false), 4000);
       addNotification({
-        title: "New Order Received 🔥",
+        title: "Riva: New Order Received 🔥",
         message: `You have ${count} pending order${count > 1 ? "s" : ""}`,
         type: "order",
       });

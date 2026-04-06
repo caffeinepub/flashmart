@@ -51,7 +51,7 @@ export default function CartPage() {
 
   const [customer, setCustomer] = useState<CustomerDetails>(() => {
     try {
-      const saved = localStorage.getItem("flashmart_customer");
+      const saved = localStorage.getItem("riva_customer");
       return saved ? JSON.parse(saved) : { name: "", phone: "", address: "" };
     } catch {
       return { name: "", phone: "", address: "" };
@@ -125,7 +125,7 @@ export default function CartPage() {
       message: `Place order for: ${summary}?`,
       action: async () => {
         try {
-          localStorage.setItem("flashmart_customer", JSON.stringify(customer));
+          localStorage.setItem("riva_customer", JSON.stringify(customer));
           const newOrderId = await createOrder.mutateAsync({
             storeId: currentStoreId!,
             itemName: summary,
@@ -138,11 +138,11 @@ export default function CartPage() {
           // Store createdAt timestamp for expiry logic
           try {
             const timestamps: Record<string, number> = JSON.parse(
-              localStorage.getItem("flashmart_order_timestamps") || "{}",
+              localStorage.getItem("riva_order_timestamps") || "{}",
             );
             timestamps[newOrderId.toString()] = Date.now();
             localStorage.setItem(
-              "flashmart_order_timestamps",
+              "riva_order_timestamps",
               JSON.stringify(timestamps),
             );
           } catch {}

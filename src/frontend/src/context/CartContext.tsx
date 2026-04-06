@@ -28,8 +28,8 @@ interface CartContextType {
   setCurrentStoreId: (id: bigint | null) => void;
 }
 
-const STORAGE_KEY = "flashmart_cart";
-const STORE_KEY = "flashmart_cart_store";
+const STORAGE_KEY = "riva_cart";
+const STORE_KEY = "riva_cart_store";
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 

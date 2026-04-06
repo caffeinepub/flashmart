@@ -185,7 +185,7 @@ export default function DeliveryDashboard() {
     }
     if (count > prevAssignedCount.current) {
       addNotification({
-        title: "New Delivery Assigned 🚚",
+        title: "Riva: New Delivery Assigned 🚚",
         message: "A new delivery has been assigned to you. Check the details.",
         type: "order",
       });

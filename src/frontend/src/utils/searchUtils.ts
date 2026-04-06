@@ -279,7 +279,7 @@ export const TRENDING_SEARCHES = [
   "fresh vegetables",
 ];
 
-const RECENT_KEY = "flashmart_recent_searches";
+const RECENT_KEY = "riva_recent_searches";
 
 export function getRecentSearches(): string[] {
   try {

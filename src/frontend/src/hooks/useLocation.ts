@@ -9,7 +9,7 @@ export type LocationStatus =
   | "in_range"
   | "out_of_range";
 
-const STORAGE_KEY = "flashmart_location_status";
+const STORAGE_KEY = "riva_location_status";
 
 export function useLocation() {
   const [status, setStatus] = useState<LocationStatus>(() => {
