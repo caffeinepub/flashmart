@@ -8,7 +8,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { UserRole } from "../backend";
 import { useApp } from "../context/AppContext";
-import { useActor } from "../hooks/useActor";
+import { useActor, waitForActor } from "../hooks/useActor";
 
 export default function RoleSelectionPage() {
   const { actor } = useActor();
@@ -19,18 +19,15 @@ export default function RoleSelectionPage() {
   const [showAdminMsg, setShowAdminMsg] = useState<string | null>(null);
 
   const handleContinue = async () => {
-    if (!actor) {
-      toast.error("Not connected.");
-      return;
-    }
     setLoading(true);
     try {
-      await actor.createUserProfile(
+      const a = actor ?? (await waitForActor());
+      await a.createUserProfile(
         currentPhone,
         name.trim() || "Riva User",
         UserRole.customer,
       );
-      const profile = await actor.getCallerUserProfile();
+      const profile = await a.getCallerUserProfile();
       if (profile) {
         setCurrentUser(profile);
         queryClient.setQueryData(["callerProfile"], profile);
@@ -178,7 +175,7 @@ export default function RoleSelectionPage() {
             disabled={loading}
             className="w-full bg-primary hover:bg-primary/90 text-white font-semibold"
           >
-            {loading ? "Setting up..." : "Continue as Customer"}
+            {loading ? "Connecting..." : "Continue as Customer"}
           </Button>
         </div>
       </motion.div>

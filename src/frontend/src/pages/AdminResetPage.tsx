@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
-import { useActor } from "../hooks/useActor";
+import { useActor, waitForActor } from "../hooks/useActor";
 
 const ADMIN_PASSWORD = "FLASHMART007";
 
@@ -78,15 +78,13 @@ export default function AdminResetPage() {
       return;
     }
 
-    if (!actor) {
-      setError("Not connected to backend. Please refresh and try again.");
-      return;
-    }
-
     setLoading(true);
     try {
+      // Wait for actor to be ready if it isn't yet
+      const a = actor ?? (await waitForActor());
+
       // Pass both password and confirmation to backend
-      const result: string = await (actor as any).resetAllData(
+      const result: string = await (a as any).resetAllData(
         password.trim(),
         confirmText.trim(),
       );
@@ -106,7 +104,6 @@ export default function AdminResetPage() {
     } catch (err: unknown) {
       console.error("[AdminReset] Error:", err);
       const msg = err instanceof Error ? err.message : String(err);
-      // Don't show internal trap messages as "Invalid credentials"
       setError(`Reset failed: ${msg || "backend error. Please try again."}`);
     } finally {
       setLoading(false);

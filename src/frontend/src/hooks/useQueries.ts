@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { OrderStatus, Store, UserProfile } from "../backend";
-import { useActor } from "./useActor";
+import { useActor, waitForActor } from "./useActor";
 
 export function useCallerProfile() {
   const { actor, isFetching: actorFetching } = useActor();
@@ -86,8 +86,8 @@ export function useCreateOrder() {
       pinnedLatitude: number;
       pinnedLongitude: number;
     }) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.createOrder(
+      const a = actor ?? (await waitForActor());
+      return a.createOrder(
         params.storeId,
         params.itemName,
         params.customerName,
@@ -116,8 +116,8 @@ export function useUpdateOrderStatus() {
       orderId: bigint;
       status: OrderStatus;
     }) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.updateOrderStatus(orderId, status);
+      const a = actor ?? (await waitForActor());
+      return a.updateOrderStatus(orderId, status);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ordersByStatus"] });
@@ -183,8 +183,8 @@ export function useAddProduct() {
       price: number;
       image: string;
     }) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.addProduct(storeId, name, description, price, image);
+      const a = actor ?? (await waitForActor());
+      return a.addProduct(storeId, name, description, price, image);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["allProducts"] });
@@ -211,8 +211,8 @@ export function useUpdateProduct() {
       price: number;
       image: string;
     }) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.updateProduct(productId, name, description, price, image);
+      const a = actor ?? (await waitForActor());
+      return a.updateProduct(productId, name, description, price, image);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["allProducts"] });
@@ -227,8 +227,8 @@ export function useDeleteProduct() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (productId: bigint) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.deleteProduct(productId);
+      const a = actor ?? (await waitForActor());
+      return a.deleteProduct(productId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["allProducts"] });
@@ -299,9 +299,9 @@ export function useCreateStore() {
       latitude: number;
       longitude: number;
     }) => {
-      if (!actor) throw new Error("Not connected");
+      const a = actor ?? (await waitForActor());
       console.log("[createStore] Calling backend with params:", params);
-      const storeId = await actor.createStore(
+      const storeId = await a.createStore(
         params.name,
         params.image,
         params.category,
@@ -332,8 +332,8 @@ export function useToggleStoreOpen() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (storeId: bigint) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.toggleStoreOpen(storeId);
+      const a = actor ?? (await waitForActor());
+      return a.toggleStoreOpen(storeId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["allStores"] });
@@ -355,8 +355,8 @@ export function useUpdateStore() {
       description: string;
       deliveryTime: string;
     }) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.updateStore(
+      const a = actor ?? (await waitForActor());
+      return a.updateStore(
         params.storeId,
         params.name,
         params.image,
@@ -382,8 +382,8 @@ export function useUpdateStoreLocation() {
       latitude: number;
       longitude: number;
     }) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.updateStoreLocation(
+      const a = actor ?? (await waitForActor());
+      return a.updateStoreLocation(
         params.storeId,
         params.latitude,
         params.longitude,
@@ -437,9 +437,9 @@ export function useResetAllData() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (adminPassword: string) => {
-      if (!actor) throw new Error("Not connected");
+      const a = actor ?? (await waitForActor());
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (actor as any).resetAllData(adminPassword) as Promise<string>;
+      return (a as any).resetAllData(adminPassword) as Promise<string>;
     },
     onSuccess: () => {
       // Invalidate all queries so UI reflects fresh state
