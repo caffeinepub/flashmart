@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
 import { useActor } from "../hooks/useActor";
 
+const ADMIN_PASSWORD = "FLASHMART007";
+
 interface ResetLogEntry {
   timestamp: bigint;
   caller: { toText(): string };
@@ -45,7 +47,6 @@ function useResetAllData() {
 
 function formatTimestamp(ts: bigint): string {
   try {
-    // Motoko timestamps are in nanoseconds
     const ms = Number(ts / 1_000_000n);
     return new Date(ms).toLocaleString();
   } catch {
@@ -57,6 +58,7 @@ export default function AdminResetPage() {
   const { navigate } = useApp();
   const [password, setPassword] = useState("");
   const [confirmText, setConfirmText] = useState("");
+  const [validationError, setValidationError] = useState("");
   const { data: resetLogs } = useGetResetLogs();
   const resetMutation = useResetAllData();
 
@@ -65,29 +67,33 @@ export default function AdminResetPage() {
       ? [...resetLogs].sort((a, b) => Number(b.timestamp - a.timestamp))[0]
       : null;
 
-  const isReady = password.trim().length > 0 && confirmText === "RESET";
+  const isFormFilled =
+    password.trim().length > 0 && confirmText.trim().length > 0;
   const isPending = resetMutation.isPending;
 
   const handleReset = async () => {
-    if (!isReady) return;
+    // Clear previous validation error
+    setValidationError("");
+
+    // Step 1: Validate both fields client-side
+    const passwordCorrect = password.trim() === ADMIN_PASSWORD;
+    const confirmCorrect = confirmText.trim() === "RESET";
+
+    if (!passwordCorrect || !confirmCorrect) {
+      setValidationError("Invalid admin credentials");
+      return;
+    }
+
+    // Step 2: Call backend reset
     try {
       const result = await resetMutation.mutateAsync(password.trim());
       console.log("[AdminReset] Result:", result);
-      toast.success("All data has been reset successfully");
+      toast.success("App data reset successful");
       localStorage.clear();
       navigate("landing");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[AdminReset] Error:", err);
-      const msg = err?.message ?? "";
-      if (
-        msg.toLowerCase().includes("invalid") ||
-        msg.toLowerCase().includes("password") ||
-        msg.toLowerCase().includes("unauthorized")
-      ) {
-        toast.error("Invalid admin password");
-      } else {
-        toast.error("Reset failed. Please try again.");
-      }
+      setValidationError("Invalid admin credentials");
     }
   };
 
@@ -148,7 +154,10 @@ export default function AdminResetPage() {
                 type="password"
                 placeholder="Enter admin password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setValidationError("");
+                }}
                 disabled={isPending}
                 autoComplete="off"
                 data-ocid="admin.reset.input"
@@ -172,31 +181,33 @@ export default function AdminResetPage() {
                 type="text"
                 placeholder="Type RESET here"
                 value={confirmText}
-                onChange={(e) => setConfirmText(e.target.value)}
+                onChange={(e) => {
+                  setConfirmText(e.target.value);
+                  setValidationError("");
+                }}
                 disabled={isPending}
                 autoComplete="off"
-                className={
-                  confirmText.length > 0 && confirmText !== "RESET"
-                    ? "border-destructive focus-visible:ring-destructive"
-                    : ""
-                }
                 data-ocid="admin.reset.textarea"
               />
-              {confirmText.length > 0 && confirmText !== "RESET" && (
-                <p
-                  className="text-xs text-destructive"
-                  data-ocid="admin.reset.error_state"
-                >
-                  Must type exactly &quot;RESET&quot; (case-sensitive)
-                </p>
-              )}
             </div>
+
+            {/* Validation Error */}
+            {validationError && (
+              <div
+                className="rounded-lg bg-destructive/10 border border-destructive/30 px-4 py-3"
+                data-ocid="admin.reset.error_state"
+              >
+                <p className="text-sm font-semibold text-destructive">
+                  {validationError}
+                </p>
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex flex-col gap-3 pt-1">
               <Button
                 onClick={handleReset}
-                disabled={!isReady || isPending}
+                disabled={!isFormFilled || isPending}
                 className="w-full bg-destructive hover:bg-destructive/90 text-white font-semibold"
                 data-ocid="admin.reset.delete_button"
               >
