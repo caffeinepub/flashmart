@@ -2,10 +2,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, ShieldAlert, TriangleAlert } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  CheckCircle2,
+  Loader2,
+  ShieldAlert,
+  TriangleAlert,
+} from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
 import { useActor } from "../hooks/useActor";
 
@@ -22,26 +26,14 @@ function useGetResetLogs() {
     queryKey: ["resetLogs"],
     queryFn: async () => {
       if (!actor) return [];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (actor as any).getResetLogs();
+      try {
+        return await (actor as any).getResetLogs();
+      } catch {
+        return [];
+      }
     },
     enabled: !!actor && !actorFetching,
     staleTime: 30_000,
-  });
-}
-
-function useResetAllData() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (adminPassword: string) => {
-      if (!actor) throw new Error("Not connected");
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (actor as any).resetAllData(adminPassword) as Promise<string>;
-    },
-    onSuccess: () => {
-      queryClient.clear();
-    },
   });
 }
 
@@ -56,11 +48,13 @@ function formatTimestamp(ts: bigint): string {
 
 export default function AdminResetPage() {
   const { navigate } = useApp();
+  const { actor } = useActor();
   const [password, setPassword] = useState("");
   const [confirmText, setConfirmText] = useState("");
-  const [validationError, setValidationError] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
   const { data: resetLogs } = useGetResetLogs();
-  const resetMutation = useResetAllData();
 
   const lastLog =
     resetLogs && resetLogs.length > 0
@@ -69,31 +63,53 @@ export default function AdminResetPage() {
 
   const isFormFilled =
     password.trim().length > 0 && confirmText.trim().length > 0;
-  const isPending = resetMutation.isPending;
 
   const handleReset = async () => {
-    // Clear previous validation error
-    setValidationError("");
+    setError("");
+    setSuccess("");
 
-    // Step 1: Validate both fields client-side
-    const passwordCorrect = password.trim() === ADMIN_PASSWORD;
-    const confirmCorrect = confirmText.trim() === "RESET";
-
-    if (!passwordCorrect || !confirmCorrect) {
-      setValidationError("Invalid admin credentials");
+    // Client-side validation first
+    if (password.trim() !== ADMIN_PASSWORD) {
+      setError("Invalid admin credentials. Check your password.");
+      return;
+    }
+    if (confirmText.trim() !== "RESET") {
+      setError('Type exactly "RESET" in the confirmation field.');
       return;
     }
 
-    // Step 2: Call backend reset
+    if (!actor) {
+      setError("Not connected to backend. Please refresh and try again.");
+      return;
+    }
+
+    setLoading(true);
     try {
-      const result = await resetMutation.mutateAsync(password.trim());
-      console.log("[AdminReset] Result:", result);
-      toast.success("App data reset successful");
+      // Pass both password and confirmation to backend
+      const result: string = await (actor as any).resetAllData(
+        password.trim(),
+        confirmText.trim(),
+      );
+      console.log("[AdminReset] Backend response:", result);
+
+      if (result.startsWith("Error:")) {
+        setError(result);
+        return;
+      }
+
+      // Success
+      setSuccess("Reset successful");
       localStorage.clear();
-      navigate("landing");
+      setTimeout(() => {
+        navigate("landing");
+      }, 1500);
     } catch (err: unknown) {
       console.error("[AdminReset] Error:", err);
-      setValidationError("Reset failed: backend error. Please try again.");
+      const msg = err instanceof Error ? err.message : String(err);
+      // Don't show internal trap messages as "Invalid credentials"
+      setError(`Reset failed: ${msg || "backend error. Please try again."}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -156,9 +172,10 @@ export default function AdminResetPage() {
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
-                  setValidationError("");
+                  setError("");
+                  setSuccess("");
                 }}
-                disabled={isPending}
+                disabled={loading}
                 autoComplete="off"
                 data-ocid="admin.reset.input"
               />
@@ -183,22 +200,36 @@ export default function AdminResetPage() {
                 value={confirmText}
                 onChange={(e) => {
                   setConfirmText(e.target.value);
-                  setValidationError("");
+                  setError("");
+                  setSuccess("");
                 }}
-                disabled={isPending}
+                disabled={loading}
                 autoComplete="off"
                 data-ocid="admin.reset.textarea"
               />
             </div>
 
-            {/* Validation Error */}
-            {validationError && (
+            {/* Error Message */}
+            {error && (
               <div
                 className="rounded-lg bg-destructive/10 border border-destructive/30 px-4 py-3"
                 data-ocid="admin.reset.error_state"
               >
                 <p className="text-sm font-semibold text-destructive">
-                  {validationError}
+                  {error}
+                </p>
+              </div>
+            )}
+
+            {/* Success Message */}
+            {success && (
+              <div
+                className="rounded-lg bg-green-50 border border-green-300 px-4 py-3 flex items-center gap-2"
+                data-ocid="admin.reset.success_state"
+              >
+                <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+                <p className="text-sm font-semibold text-green-700">
+                  {success}
                 </p>
               </div>
             )}
@@ -207,11 +238,11 @@ export default function AdminResetPage() {
             <div className="flex flex-col gap-3 pt-1">
               <Button
                 onClick={handleReset}
-                disabled={!isFormFilled || isPending}
+                disabled={!isFormFilled || loading}
                 className="w-full bg-destructive hover:bg-destructive/90 text-white font-semibold"
                 data-ocid="admin.reset.delete_button"
               >
-                {isPending ? (
+                {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Resetting...
@@ -223,7 +254,7 @@ export default function AdminResetPage() {
               <Button
                 variant="outline"
                 onClick={() => navigate("landing")}
-                disabled={isPending}
+                disabled={loading}
                 className="w-full"
                 data-ocid="admin.reset.cancel_button"
               >

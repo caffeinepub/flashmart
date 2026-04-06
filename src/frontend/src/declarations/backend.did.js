@@ -146,6 +146,7 @@ export const idlService = IDL.Service({
       [IDL.Vec(Product)],
       ['query'],
     ),
+  'getResetLogs' : IDL.Func([], [IDL.Vec(ResetLog)], ['query']),
   'getStoreById' : IDL.Func([IDL.Int], [IDL.Opt(Store)], ['query']),
   'getStoreByVendor' : IDL.Func([IDL.Principal], [IDL.Opt(Store)], ['query']),
   'getUserProfile' : IDL.Func(
@@ -155,6 +156,7 @@ export const idlService = IDL.Service({
     ),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'isNewUser' : IDL.Func([IDL.Text], [IDL.Bool], ['query']),
+  'resetAllData' : IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
   'toggleStoreOpen' : IDL.Func([IDL.Int], [IDL.Bool], []),
   'updateDeliveryLocation' : IDL.Func(
@@ -250,6 +252,10 @@ export const idlFactory = ({ IDL }) => {
     'partnerId' : IDL.Principal,
     'updatedAt' : IDL.Int,
   });
+  const ResetLog = IDL.Record({
+    'timestamp' : IDL.Int,
+    'caller' : IDL.Principal,
+  });
   
   return IDL.Service({
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
@@ -315,6 +321,7 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Vec(Product)],
         ['query'],
       ),
+    'getResetLogs' : IDL.Func([], [IDL.Vec(ResetLog)], ['query']),
     'getStoreById' : IDL.Func([IDL.Int], [IDL.Opt(Store)], ['query']),
     'getStoreByVendor' : IDL.Func([IDL.Principal], [IDL.Opt(Store)], ['query']),
     'getUserProfile' : IDL.Func(
@@ -324,6 +331,7 @@ export const idlFactory = ({ IDL }) => {
       ),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
     'isNewUser' : IDL.Func([IDL.Text], [IDL.Bool], ['query']),
+    'resetAllData' : IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
     'toggleStoreOpen' : IDL.Func([IDL.Int], [IDL.Bool], []),
     'updateDeliveryLocation' : IDL.Func(
@@ -347,8 +355,6 @@ export const idlFactory = ({ IDL }) => {
         [],
         [],
       ),
-    'getResetLogs' : IDL.Func([], [IDL.Vec(ResetLog)], ['query']),
-    'resetAllData' : IDL.Func([IDL.Text], [IDL.Text], []),
     'updateUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'verifyOtp' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
   });

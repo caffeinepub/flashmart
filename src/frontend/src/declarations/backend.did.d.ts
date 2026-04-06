@@ -74,8 +74,8 @@ export type UserRole__1 = { 'admin' : null } |
   { 'user' : null } |
   { 'guest' : null };
 export interface ResetLog {
-  timestamp: bigint;
-  caller: Principal;
+  'timestamp' : bigint,
+  'caller' : Principal,
 }
 export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
@@ -126,7 +126,7 @@ export interface _SERVICE {
   >,
   'updateStoreLocation' : ActorMethod<[bigint, number, number], undefined>,
   'getResetLogs' : ActorMethod<[], Array<ResetLog>>,
-  'resetAllData' : ActorMethod<[string], string>,
+  'resetAllData' : ActorMethod<[string, string], string>,
   'updateUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'verifyOtp' : ActorMethod<[string, string], boolean>,
 }

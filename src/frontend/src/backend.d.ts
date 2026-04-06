@@ -117,7 +117,7 @@ export interface backendInterface {
     updateStore(storeId: bigint, name: string, image: string, category: string, description: string, deliveryTime: string): Promise<void>;
     updateStoreLocation(storeId: bigint, latitude: number, longitude: number): Promise<void>;
     getResetLogs(): Promise<Array<ResetLog>>;
-    resetAllData(adminPassword: string): Promise<string>;
+    resetAllData(adminPassword: string, confirmation: string): Promise<string>;
     updateUserRole(user: Principal, newRole: UserRole): Promise<void>;
     verifyOtp(phone: string, code: string): Promise<boolean>;
 }

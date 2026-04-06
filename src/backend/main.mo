@@ -567,17 +567,20 @@ actor {
   // ADMIN: RESET ALL DATA
   // ==========================================
 
-  public shared ({ caller }) func resetAllData(adminPassword : Text) : async Text {
+  public shared ({ caller }) func resetAllData(adminPassword : Text, confirmation : Text) : async Text {
     if (adminPassword != "FLASHMART007") {
-      Runtime.trap("Unauthorized: Invalid admin password");
+      return "Error: Invalid admin password";
+    };
+    if (confirmation != "RESET") {
+      return "Error: Invalid confirmation. Type RESET to confirm";
     };
 
-    // Clear all data maps
-    users.clear();
-    stores.clear();
-    products.clear();
+    // Delete in correct order: orders first, then delivery data, products, stores, users
     orders.clear();
     deliveryLocations.clear();
+    products.clear();
+    stores.clear();
+    users.clear();
     otps.clear();
 
     // Reset all ID counters
@@ -592,7 +595,7 @@ actor {
     };
     resetLogs.add(logEntry);
 
-    "Reset complete at " # Time.now().toText();
+    "Reset successful";
   };
 
   public query func getResetLogs() : async [ResetLog] {
