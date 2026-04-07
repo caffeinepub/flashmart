@@ -8,7 +8,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { UserRole } from "../backend";
 import { useApp } from "../context/AppContext";
-import { useActor, waitForActor } from "../hooks/useActor";
+import { useActor } from "../hooks/useActor";
 
 export default function RoleSelectionPage() {
   const { actor } = useActor();
@@ -21,13 +21,13 @@ export default function RoleSelectionPage() {
   const handleContinue = async () => {
     setLoading(true);
     try {
-      const a = actor ?? (await waitForActor());
-      await a.createUserProfile(
+      if (!actor) throw new Error("Backend not connected. Please try again.");
+      await actor.createUserProfile(
         currentPhone,
         name.trim() || "Riva User",
         UserRole.customer,
       );
-      const profile = await a.getCallerUserProfile();
+      const profile = await actor.getCallerUserProfile();
       if (profile) {
         setCurrentUser(profile);
         queryClient.setQueryData(["callerProfile"], profile);

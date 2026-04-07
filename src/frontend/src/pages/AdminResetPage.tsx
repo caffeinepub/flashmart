@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
-import { useActor, waitForActor } from "../hooks/useActor";
+import { useActor } from "../hooks/useActor";
 
 const ADMIN_PASSWORD = "FLASHMART007";
 
@@ -80,11 +80,10 @@ export default function AdminResetPage() {
 
     setLoading(true);
     try {
-      // Wait for actor to be ready if it isn't yet
-      const a = actor ?? (await waitForActor());
+      if (!actor) throw new Error("Backend not connected. Please try again.");
 
       // Pass both password and confirmation to backend
-      const result: string = await (a as any).resetAllData(
+      const result: string = await (actor as any).resetAllData(
         password.trim(),
         confirmText.trim(),
       );

@@ -9,6 +9,8 @@ import {
   Store,
   Trash2,
   User,
+  Users,
+  Zap,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
@@ -25,6 +27,8 @@ interface CustomerDetails {
   phone: string;
   address: string;
 }
+
+type DeliveryOption = "instant" | "group" | null;
 
 export default function CartPage() {
   const {
@@ -49,6 +53,9 @@ export default function CartPage() {
     lng: number;
   } | null>(null);
 
+  // Delivery option state — only relevant when totalPrice < 100
+  const [deliveryOption, setDeliveryOption] = useState<DeliveryOption>(null);
+
   const [customer, setCustomer] = useState<CustomerDetails>(() => {
     try {
       const saved = localStorage.getItem("riva_customer");
@@ -58,8 +65,18 @@ export default function CartPage() {
     }
   });
   const [formErrors, setFormErrors] = useState<
-    Partial<CustomerDetails & { pin: string }>
+    Partial<CustomerDetails & { pin: string; delivery: string }>
   >({});
+
+  // Delivery fee logic
+  const deliveryFee = useMemo(() => {
+    if (totalPrice >= 100) return 15; // instant delivery, no choice
+    if (deliveryOption === "instant") return 15;
+    if (deliveryOption === "group") return 5;
+    return 0; // not yet selected
+  }, [totalPrice, deliveryOption]);
+
+  const finalTotal = totalPrice + deliveryFee;
 
   const zoneStatus = useMemo(() => {
     if (!pinnedLocation) return "no_pin";
@@ -80,8 +97,16 @@ export default function CartPage() {
     }
   };
 
+  const handleDeliverySelect = (option: DeliveryOption) => {
+    setDeliveryOption(option);
+    if (formErrors.delivery) {
+      setFormErrors((prev) => ({ ...prev, delivery: undefined }));
+    }
+  };
+
   const validateForm = (): boolean => {
-    const errors: Partial<CustomerDetails & { pin: string }> = {};
+    const errors: Partial<CustomerDetails & { pin: string; delivery: string }> =
+      {};
     if (!customer.name.trim()) errors.name = "Name is required";
     if (!customer.phone.trim()) errors.phone = "Phone number is required";
     if (!customer.address.trim()) errors.address = "Address is required";
@@ -89,6 +114,8 @@ export default function CartPage() {
       errors.pin = "Please pin your delivery location on the map";
     if (!currentStoreId)
       errors.pin = "No store selected — go back and shop from a store";
+    if (totalPrice < 100 && deliveryOption === null)
+      errors.delivery = "Please select a delivery option";
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -120,9 +147,15 @@ export default function CartPage() {
       return;
     }
     const summary = items.map((i) => `${i.name} x${i.quantity}`).join(", ");
+    const deliveryLabel =
+      totalPrice >= 100
+        ? "Instant Delivery (₹15)"
+        : deliveryOption === "group"
+          ? "Group Delivery (₹5)"
+          : "Instant Delivery (₹15)";
     setConfirmModal({
       open: true,
-      message: `Place order for: ${summary}?`,
+      message: `Place order for: ${summary}?\nTotal: ₹${finalTotal} (${deliveryLabel})`,
       action: async () => {
         try {
           localStorage.setItem("riva_customer", JSON.stringify(customer));
@@ -249,6 +282,7 @@ export default function CartPage() {
         </div>
       ) : (
         <>
+          {/* Cart items */}
           <div className="space-y-3 mb-6">
             <AnimatePresence>
               {items.map((item) => (
@@ -316,12 +350,149 @@ export default function CartPage() {
             </AnimatePresence>
           </div>
 
-          {/* Total */}
-          <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-6">
-            <span className="font-bold text-gray-900">Total</span>
-            <span className="font-extrabold text-green-700 text-lg">
-              ₹{totalPrice}
-            </span>
+          {/* Delivery Option Selection (only when order < ₹100) */}
+          {totalPrice < 100 && (
+            <div className="mb-4">
+              <p className="text-sm font-extrabold text-gray-900 mb-2">
+                Choose Delivery Type
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {/* Instant Delivery */}
+                <button
+                  type="button"
+                  onClick={() => handleDeliverySelect("instant")}
+                  data-ocid="cart.instant_delivery.toggle"
+                  className={`flex flex-col items-center gap-1.5 border-2 rounded-xl p-4 transition-all ${
+                    deliveryOption === "instant"
+                      ? "border-green-500 bg-green-50"
+                      : "border-gray-200 bg-white hover:border-green-300"
+                  }`}
+                >
+                  <Zap
+                    className={`w-6 h-6 ${
+                      deliveryOption === "instant"
+                        ? "text-green-600"
+                        : "text-gray-400"
+                    }`}
+                  />
+                  <span
+                    className={`text-xs font-bold leading-tight text-center ${
+                      deliveryOption === "instant"
+                        ? "text-green-700"
+                        : "text-gray-700"
+                    }`}
+                  >
+                    ⚡ Instant
+                  </span>
+                  <span
+                    className={`text-base font-extrabold ${
+                      deliveryOption === "instant"
+                        ? "text-green-700"
+                        : "text-gray-800"
+                    }`}
+                  >
+                    ₹15
+                  </span>
+                  {deliveryOption === "instant" && (
+                    <span className="text-[10px] font-semibold text-green-600 bg-green-100 rounded-full px-2 py-0.5">
+                      Selected
+                    </span>
+                  )}
+                </button>
+
+                {/* Group Delivery */}
+                <button
+                  type="button"
+                  onClick={() => handleDeliverySelect("group")}
+                  data-ocid="cart.group_delivery.toggle"
+                  className={`flex flex-col items-center gap-1.5 border-2 rounded-xl p-4 transition-all ${
+                    deliveryOption === "group"
+                      ? "border-green-500 bg-green-50"
+                      : "border-gray-200 bg-white hover:border-green-300"
+                  }`}
+                >
+                  <Users
+                    className={`w-6 h-6 ${
+                      deliveryOption === "group"
+                        ? "text-green-600"
+                        : "text-gray-400"
+                    }`}
+                  />
+                  <span
+                    className={`text-xs font-bold leading-tight text-center ${
+                      deliveryOption === "group"
+                        ? "text-green-700"
+                        : "text-gray-700"
+                    }`}
+                  >
+                    👥 Group
+                  </span>
+                  <span
+                    className={`text-base font-extrabold ${
+                      deliveryOption === "group"
+                        ? "text-green-700"
+                        : "text-gray-800"
+                    }`}
+                  >
+                    ₹5
+                  </span>
+                  {deliveryOption === "group" && (
+                    <span className="text-[10px] font-semibold text-green-600 bg-green-100 rounded-full px-2 py-0.5">
+                      Selected
+                    </span>
+                  )}
+                </button>
+              </div>
+              {formErrors.delivery && (
+                <p
+                  className="text-xs text-red-500 mt-2"
+                  data-ocid="cart.delivery_error"
+                >
+                  {formErrors.delivery}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Charges Breakdown */}
+          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 mb-6 shadow-sm">
+            <div className="flex items-center justify-between py-1.5">
+              <span className="text-sm text-gray-600">Items Total</span>
+              <span className="text-sm font-semibold text-gray-900">
+                ₹{totalPrice}
+              </span>
+            </div>
+            <div className="flex items-center justify-between py-1.5">
+              <span className="text-sm text-gray-600 flex items-center gap-1">
+                {totalPrice >= 100 ? (
+                  <>
+                    <Zap className="w-3.5 h-3.5 text-yellow-500" />
+                    Instant Delivery
+                  </>
+                ) : deliveryOption === "group" ? (
+                  <>
+                    <Users className="w-3.5 h-3.5 text-blue-500" />
+                    Group Delivery
+                  </>
+                ) : deliveryOption === "instant" ? (
+                  <>
+                    <Zap className="w-3.5 h-3.5 text-yellow-500" />
+                    Instant Delivery
+                  </>
+                ) : (
+                  "Delivery"
+                )}
+              </span>
+              <span className="text-sm font-semibold text-gray-900">
+                {deliveryFee > 0 ? `₹${deliveryFee}` : "—"}
+              </span>
+            </div>
+            <div className="border-t border-gray-100 mt-1 pt-2 flex items-center justify-between">
+              <span className="font-extrabold text-gray-900">Total</span>
+              <span className="font-extrabold text-green-700 text-lg">
+                ₹{deliveryFee > 0 ? finalTotal : totalPrice}
+              </span>
+            </div>
           </div>
 
           {/* Customer Details Form */}

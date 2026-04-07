@@ -6,46 +6,6 @@ import { getSecretParameter } from "../utils/urlParams";
 import { useInternetIdentity } from "./useInternetIdentity";
 
 const ACTOR_QUERY_KEY = "actor";
-
-// ── Module-level actor tracking so mutations can wait for the actor ────────
-let _latestActor: backendInterface | null = null;
-let _actorResolvers: Array<(actor: backendInterface) => void> = [];
-
-export function _setLatestActor(actor: backendInterface | null) {
-  _latestActor = actor;
-  if (actor) {
-    for (const resolve of _actorResolvers) {
-      resolve(actor);
-    }
-    _actorResolvers = [];
-  }
-}
-
-/**
- * Returns a promise that resolves when the actor is ready.
- * If the actor is already available it resolves immediately.
- * Rejects after `timeoutMs` (default 10 s) with a user-friendly message.
- */
-export async function waitForActor(
-  timeoutMs = 10_000,
-): Promise<backendInterface> {
-  if (_latestActor) return _latestActor;
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      _actorResolvers = _actorResolvers.filter((r) => r !== resolve);
-      reject(
-        new Error(
-          "Could not connect to backend. Please refresh and try again.",
-        ),
-      );
-    }, timeoutMs);
-    _actorResolvers.push((actor) => {
-      clearTimeout(timer);
-      resolve(actor);
-    });
-  });
-}
-
 export function useActor() {
   const { identity } = useInternetIdentity();
   const queryClient = useQueryClient();
@@ -76,10 +36,9 @@ export function useActor() {
     enabled: true,
   });
 
-  // When the actor changes, invalidate dependent queries and update module ref
+  // When the actor changes, invalidate dependent queries
   useEffect(() => {
     if (actorQuery.data) {
-      _setLatestActor(actorQuery.data);
       queryClient.invalidateQueries({
         predicate: (query) => {
           return !query.queryKey.includes(ACTOR_QUERY_KEY);
@@ -90,8 +49,6 @@ export function useActor() {
           return !query.queryKey.includes(ACTOR_QUERY_KEY);
         },
       });
-    } else {
-      _setLatestActor(null);
     }
   }, [actorQuery.data, queryClient]);
 
